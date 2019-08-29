@@ -1,0 +1,25 @@
+[general]
+name: MapBiomas Collection
+description: This plugin lets you get collection of mapping from MapBiomas Project(http://mapbiomas.org/).
+
+version:0.1
+qgisMinimumVersion:3.4
+
+author:Luiz Motta
+email:motta.luiz@gmail.com
+
+category:Plugin
+
+tags:MapBiomas
+
+homepage:https://github.com/lmotta/mapbiomascollection/wiki
+tracker:https://github.com/lmotta/mapbiomascollection/issues
+repository:https://github.com/mapbiomascollection
+
+icon:mapbiomas.svg
+
+experimental:True
+deprecated:False
+
+changelog: 0.1(2019-08-29)
+  Start of plugin
