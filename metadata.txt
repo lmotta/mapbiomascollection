@@ -1,6 +1,8 @@
 [general]
 name: MapBiomas Collection
 description: This plugin lets you get collection of mapping from MapBiomas Project(http://mapbiomas.org/).
+about:This plugin add layers(WMS) of collection from MapBiomas.
+  After select the year and class of map, click in 'Create Group' button for add all layers inside a group.
 
 version:0.1
 qgisMinimumVersion:3.4
@@ -8,7 +10,7 @@ qgisMinimumVersion:3.4
 author:Luiz Motta
 email:motta.luiz@gmail.com
 
-category:Plugin
+category:Web
 
 tags:MapBiomas
 
