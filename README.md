@@ -2,7 +2,7 @@
 [mapbiomas_logo]: https://k6f2r3a6.stackpathcdn.com/wp-content/uploads/2018/04/C%C3%B3pia-de-mapbiomas_IV%C6%92_a-01.png
 
 ![][mapbiomas_logo]
-[PlanetLab](http://mapbiomas.org/)
+[MapBiomas](http://mapbiomas.org/)
 
 # MapBiomas Collection Plugin QGIS
 
