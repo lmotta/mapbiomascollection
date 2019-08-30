@@ -24,6 +24,6 @@ experimental:True
 deprecated:False
 
 changelog: 0.2(2019-08-30)
-Update metadata and added collection number
-- 0.1(2019-08-29)
+  Update metadata and added collection number
+  - 0.1(2019-08-29)
   Start of plugin
