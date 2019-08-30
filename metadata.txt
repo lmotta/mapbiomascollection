@@ -16,7 +16,7 @@ tags:MapBiomas
 
 homepage:https://github.com/lmotta/mapbiomascollection/wiki
 tracker:https://github.com/lmotta/mapbiomascollection/issues
-repository:https://github.com/mapbiomascollection
+repository:https://github.com/lmotta/mapbiomascollection
 
 icon:mapbiomas.svg
 

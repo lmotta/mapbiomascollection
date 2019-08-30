@@ -88,7 +88,7 @@ class DockWidgetMapbiomasCollection(QDockWidget):
             wgt.setLayout( lyt )
             self.setWidget( wgt )
 
-        super().__init__('MapBiomas Collection', iface.mainWindow() )
+        super().__init__('MapBiomas Collection 4', iface.mainWindow() )
         self.collection_class = {
             "1. Floresta": 1,
             "1.1. Floresta Natural": 2,
