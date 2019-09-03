@@ -140,17 +140,38 @@ class MapbiomasCollection(QObject):
     def __del__(self):
         self.dockWidget.btnAdd.clicked.disconnect( self.addGroup )
 
+    def _getUrlBioma(self, year, l_strClass):
+        url = 'http://workspace.mapbiomas.org/wms'
+        paramsWms = 'IgnoreGetFeatureInfoUrl=1&IgnoreGetMapUrl=1&crs=EPSG:3857&dpiMode=7&format=image/png&layers=coverage&styles='
+        paramsQuote = "map=wms/v/4.0/classification/coverage.map&layers=coverage&transparent=true&version=1.1.1&territory_id=10"
+        paramsQuote = urllib.parse.quote( "{}&year={}&classification_ids=".format( paramsQuote, year ) )
+        paramClassification = ','.join( l_strClass )
+        return "{}&url={}?{}{}".format( paramsWms, url, paramsQuote, paramClassification )
+
+    def _getYearClassLayerBioma(self, layer):
+        source = layer.source()
+        if source.find('http://workspace.mapbiomas.org/wms') == -1:
+            return { 'isOk': False }
+        idx = source.find('year')
+        if idx == -1:
+            return { 'isOk': False }
+        year_class = urllib.parse.unquote( source[ idx: ] ).split('&')
+        vreturn = {'isOk': True }
+        for item in year_class:
+            d = item.split('=')
+            vreturn[ d[0] ] = d[1]
+        ids_class = [ int( item ) for item in vreturn['classification_ids'].split(',') ]
+        del vreturn['classification_ids']
+        d = self.dockWidget.collection_class
+        l_class = [ k for k in d if d[k] in ids_class ]
+        vreturn['class'] = l_class
+        return vreturn
+
     @pyqtSlot()
     def addGroup(self):
-        def getLayerBiomas(year, itemsClass):
-            url = 'http://workspace.mapbiomas.org/wms'
-            paramsWms = 'IgnoreGetFeatureInfoUrl=1&IgnoreGetMapUrl=1&crs=EPSG:3857&dpiMode=7&format=image/png&layers=coverage&styles='
-            paramsQuote = "map=wms/v/4.0/classification/coverage.map&layers=coverage&transparent=true&version=1.1.1&territory_id=10"
-            paramsQuote = "{}&year={}&classification_ids=".format( paramsQuote, year )
-            paramClassification = ','.join( itemsClass )
-            url = "{}&url={}?{}{}".format( paramsWms, url, urllib.parse.quote( paramsQuote ), paramClassification )
+        def getLayerBiomas(year, l_strClass):
             nameLayer = "Collection {}".format( year )
-            return QgsRasterLayer( url, nameLayer, 'wms' )
+            return QgsRasterLayer( self._getUrlBioma( year, l_strClass ), nameLayer, 'wms' )
 
         itemsYear = self.dockWidget.listwYears.selectedItems()
         if len( itemsYear ) == 0:
@@ -164,15 +185,14 @@ class MapbiomasCollection(QObject):
             msg = 'Need select at least one Class'
             self.msgBar.pushMessage( self.nameModulus, msg, Qgis.Critical )
             return
-        else:
-            d =  self.dockWidget.collection_class
-            itemsClass = [ str( d[ item.text() ] ) for item in itemsClass ]
         # Add Group
         self.numGroup += 1
         name = "MapBiomas #{}".format( self.numGroup )
         group = self.root.addGroup( name )
+        d = self.dockWidget.collection_class
+        l_strClass = [ str( d[ item.data( Qt.DisplayRole ) ] ) for item in itemsClass ]
         for year in itemsYear:
-            layer = getLayerBiomas( year, itemsClass )
+            layer = getLayerBiomas( year, l_strClass )
             if layer.isValid():
                 self.project.addMapLayer( layer, addToLegend=False )
                 group.addLayer( layer ).setItemVisibilityChecked( False )
