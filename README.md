@@ -12,6 +12,8 @@ This plugin lets you get collection of mapping from MapBiomas Project.
 Luiz Motta
 
 ## Changelog
+- 2019-09-05
+Add set for collection layer
 - 2019-08-30
 Update metadata and added collection number
 - 2019-08-29
