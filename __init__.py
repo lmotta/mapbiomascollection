@@ -26,21 +26,21 @@ __revision__ = '$Format:%H$'
 
 import os
 
-from qgis.PyQt.QtCore import Qt, QObject, pyqtSlot, QCoreApplication
+from qgis.PyQt.QtCore import QObject, pyqtSlot 
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction
 
-from .mapbiomascollection import DockWidgetMapbiomasCollection
+from .mapbiomascollection import MapBiomasCollection
 
 def classFactory(iface):
   return MapbiomasCollectionPlugin( iface )
 
 class MapbiomasCollectionPlugin(QObject):
-  def __init__(self, iface):
+  def __init__(self, iface=None):
     super().__init__()
     self.iface = iface
     self.name = u"&MapbiomasCollection"
-    self.dock = None
+    self.mc = None # 
 
   def initGui(self):
     name = "Mapbiomas Collection"
@@ -50,33 +50,18 @@ class MapbiomasCollectionPlugin(QObject):
     self.action.setObjectName( name.replace(' ', '') )
     self.action.setWhatsThis( about )
     self.action.setStatusTip( about )
-    self.action.setCheckable( True )
     self.action.triggered.connect( self.run )
 
     self.iface.addToolBarIcon( self.action )
     self.iface.addPluginToMenu( self.name, self.action )
 
-    self.dock = DockWidgetMapbiomasCollection( self.iface )
-    self.iface.addDockWidget( Qt.LeftDockWidgetArea , self.dock )
-    self.dock.visibilityChanged.connect( self.dockVisibilityChanged )
-
   def unload(self):
     self.iface.removeToolBarIcon( self.action )
     self.iface.removePluginMenu( self.name, self.action )
-
-    self.dock.close()
-    del self.dock
-    self.dock = None
-
     del self.action
 
   @pyqtSlot()
   def run(self):
-    if self.dock.isVisible():
-      self.dock.hide()
-    else:
-      self.dock.show()
-
-  @pyqtSlot(bool)
-  def dockVisibilityChanged(self, visible):
-    self.action.setChecked( visible )
+      self.mbc = MapBiomasCollection()
+      self.mbc.run()
+ 

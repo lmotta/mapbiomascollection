@@ -1,307 +1,373 @@
-# -*- coding: utf-8 -*-
-"""
-/***************************************************************************
-Name                 : MapBiomas Collection
-Description          : This plugin lets you get collection of mapping from MapBiomas Project(http://mapbiomas.org/).
-Date                 : August, 2019
-copyright            : (C) 2019 by Luiz Motta
-email                : motta.luiz@gmail.com
-
- ***************************************************************************/
-
-/***************************************************************************
- *                                                                         *
- *   This program is free software; you can redistribute it and/or modify  *
- *   it under the terms of the GNU General Public License as published by  *
- *   the Free Software Foundation; either version 2 of the License, or     *
- *   (at your option) any later version.                                   *
- *                                                                         *
- ***************************************************************************/
-"""
-__author__ = 'Luiz Motta'
-__date__ = '2019-08-28'
-__copyright__ = '(C) 2019, Luiz Motta'
-__revision__ = '$Format:%H$'
-
+import os, json
 import urllib.parse
 
-from qgis.PyQt.QtCore import (
-  Qt, QObject, pyqtSlot
-)
-from qgis.PyQt.QtWidgets import (
-  QWidget, QDockWidget,
-  QComboBox, QPushButton,
-  QRadioButton, QGroupBox,
-  QLabel, QListWidget, QListWidgetItem, QAbstractItemView,
-  QLayout, QHBoxLayout, QVBoxLayout, QSizePolicy
-)
-from qgis.PyQt.QtGui import QIcon, QFont, QCursor
+from osgeo import gdal
 
-from qgis.PyQt.QtXml import QDomDocument
+from qgis.PyQt.QtCore import Qt, pyqtSlot
+from qgis.PyQt.QtWidgets import (
+    QWidget, QPushButton,
+    QSlider, QLabel,
+    QTreeWidget, QTreeWidgetItem,
+    QVBoxLayout, QHBoxLayout
+)
+from qgis.PyQt.QtGui import (
+    QColor, QPixmap, QIcon
+)
 
 from qgis.core import (
-    Qgis, QgsProject, QgsLayerTreeLayer, QgsRasterLayer, QgsReadWriteContext
+    QgsApplication, Qgis, QgsProject,
+    QgsRasterLayer,
+    QgsMapSettings,
+    QgsTask, QgsMapRendererParallelJob
 )
+from qgis.gui import QgsGui, QgsMessageBar, QgsLayerTreeEmbeddedWidgetProvider
+
+from qgis import utils as QgsUtils
+
+def getConfigMapBiomasCollection():
+    fileConfig = os.path.join( os.path.dirname(__file__), 'mapbiomascollection.json' )
+    with open(fileConfig) as json_file:
+        data = json.load(json_file)    
+    return data
 
 
-class DockWidgetMapbiomasCollection(QDockWidget):
-    def __init__(self, iface):
-        def setupUi():
-            def addItems(wgtList, labels, selectAll=False):
-                for l in labels:
-                    wgtList.addItem( l )
-                if selectAll:
-                    for row in range( len( labels ) ):
-                        wgtList.item( row ).setSelected( True )
-                else:
-                    wgtList.item( 0 ).setSelected( True )
+class MapBiomasCollectionWidget(QWidget):
+    nameModulus = 'MapBiomasCollection'
+    def __init__(self, layer, data):
+        def getYearClasses():
+            def getYear():
+                values = [ item for item in paramsSource if item.find('year=') > -1 ]
+                return self.maxYear if not len( values ) == 1 else int( values[0].split('=')[1] )
 
-            self.setObjectName('mapbiomascollection_dockwidget')
-            wgt = QWidget( self )
-            wgt.setAttribute( Qt.WA_DeleteOnClose )
-            # Years
-            self.listwYears = QListWidget( wgt )
-            self.listwYears.setSelectionMode( QAbstractItemView.ExtendedSelection )
-            labels = [ str(item) for item in range( 2018, 1984, -1 ) ]
-            addItems( self.listwYears, labels )
-            self.listwYears.setMaximumWidth( self.listwYears.sizeHintForColumn(0) * 2)
-            self.listwYears.setSizePolicy( QSizePolicy.Fixed, QSizePolicy.Expanding )
-            # Class
-            self.listwClass = QListWidget( wgt )
-            self.listwClass.setSelectionMode( QAbstractItemView.ExtendedSelection )
-            labels = self.collection_class.keys()
-            addItems( self.listwClass, labels, True )
-            # Layout Years + Class
-            lytList = QHBoxLayout()
-            lytList.addWidget( self.listwYears )
-            lytList.addWidget( self.listwClass )
-            #
-            gbAction = QGroupBox('Actions')
-            self.rbGroup = QRadioButton('Create Group')
-            self.rbGroup.setChecked(True)
-            self.rbLayer = QRadioButton('Set Collection Layer')
-            self.rbLayer.setEnabled( False)
-            lytAction = QHBoxLayout()
-            lytAction.addWidget( self.rbGroup )
-            lytAction.addWidget( self.rbLayer )
-            gbAction.setLayout( lytAction )
-            #
-            self.btnOk = QPushButton('OK', wgt )
-            #
+            def getClasses():
+                values = [ item for item in paramsSource if item.find('classification_ids=') > -1 ]
+                return [1,10,14,22,26,27] \
+                    if not len( values ) == 1 \
+                    else [ int( item ) for item in values[0].split('=')[1].split(',') ]
+
+            paramsSource = urllib.parse.unquote( self.layer.source() ).split('&')
+            return getYear(), getClasses()
+
+        def setGui(classes):
+            def createLayoutYear():
+                lytYear = QHBoxLayout()
+                lblTitleYear = QLabel( 'Year:', self )
+                lblYear = QLabel( str( self.year ), self )
+                lytYear.addWidget( lblTitleYear  )
+                lytYear.addWidget( lblYear )
+                return lytYear, lblYear
+
+            def createLayoutSlider():
+                def createButtonLimit(limitYear, sFormat, objectName):
+                    label = sFormat.format( limitYear )
+                    pb = QPushButton( label, self )
+                    width = pb.fontMetrics().boundingRect( label ).width() + 7
+                    pb.setMaximumWidth( width )
+                    pb.setObjectName( objectName )
+                    return pb
+
+                def createSlider():
+                    slider = QSlider( Qt.Horizontal, self )
+                    #slider.setTracking( False ) # Value changed only released mouse
+                    slider.setMinimum( self.minYear )
+                    slider.setMaximum( self.maxYear )
+                    slider.setSingleStep(1)
+                    slider.setValue( self.year )
+                    interval = int( ( self.maxYear - self.minYear) / 10 )
+                    slider.setTickInterval( interval )
+                    slider.setPageStep( interval)
+                    slider.setTickPosition( QSlider.TicksBelow )
+                    return slider
+
+                lytSlider = QHBoxLayout()
+                pbMin = createButtonLimit( self.minYear, "{} <<", 'minYear' )
+                lytSlider.addWidget( pbMin )
+                slider = createSlider()
+                lytSlider.addWidget( slider )
+                pbMax = createButtonLimit( self.maxYear, ">> {}", 'maxYear' )
+                lytSlider.addWidget( pbMax )
+                return lytSlider, slider, pbMin, pbMax
+
+            def createTree(classes):
+                def populateTreeJson(classes, itemRoot):
+                    def createIcon(color):
+                        color = QColor( color['r'], color['g'], color['b'] )
+                        pix = QPixmap(16, 16)
+                        pix.fill( color )
+                        return QIcon( pix )
+
+                    def createItem(itemRoot, name, class_id, flags, icon):
+                        # WidgetItem
+                        item = QTreeWidgetItem( itemRoot )
+                        item.setText(0, name )
+                        item.setData(0, Qt.UserRole, class_id )
+                        checkState = Qt.Checked if class_id in self.l_class_id else Qt.Unchecked
+                        item.setCheckState(0, checkState )
+                        item.setFlags( flags )
+                        item.setIcon(0, icon )
+                        return item
+
+                    flags = itemRoot.flags() | Qt.ItemIsUserCheckable
+                    for k in classes:
+                        class_id = classes[ k ]['id']
+                        icon = createIcon( classes[ k ]['color'] )
+                        itemClass = createItem( itemRoot, k, class_id, flags, icon )
+                        if 'classes' in classes[ k ]:
+                            populateTreeJson( classes[ k ]['classes'], itemClass )
+
+                tree = QTreeWidget( self )
+                tree.setSelectionMode( tree.NoSelection )
+                tree.setHeaderHidden( True )
+                itemRoot = QTreeWidgetItem( tree )
+                itemRoot.setText(0, 'Classes')
+                populateTreeJson( classes, itemRoot )
+                return tree, itemRoot
+
+            lytYear, lblYear  = createLayoutYear()
+            lytSlider, slider, pbMin, pbMax = createLayoutSlider( )
+            tree, itemClasses = createTree( classes )
+            itemClasses.setExpanded( True )
+            # Layout
             lyt = QVBoxLayout()
-            lyt.addLayout( lytList )
-            lyt.addWidget( gbAction )
-            lyt.addWidget( self.btnOk )
-            lyt.setSizeConstraint( QLayout.SetMaximumSize )
-            wgt.setLayout( lyt )
-            self.setWidget( wgt )
-
-        super().__init__('MapBiomas Collection 4', iface.mainWindow() )
-        self.collection_class = {
-            "1. Floresta": 1,
-            "1.1. Floresta Natural": 2,
-            "1.1.1. Formação Florestal": 3,
-            "1.1.2. Formação Savânica": 4,
-            "1.1.3. Mangue": 5,
-            "1.2. Floresta Plantada": 9,
-            "2. Formação Natural não Florestal": 10,
-            "2.1. Área Úmida Natural não Florestal": 11,
-            "2.2. Formação Campestre (Campo)": 12,
-            "2.3. Apicum": 32,
-            "2.4. Afloramento Rochoso": 29,
-            "2.5. Outra Formação não Florestal": 13,
-            "3. Agropecuária": 14,
-            "3.1. Pastagem": 15,
-            "3.2. Agricultura": 17,
-            "3.2.1. Cultura Anual e Perene": 19,
-            "3.2.2. Cultura Semi-Perene": 20,
-            "3.3 Mosaico de Agricultura ou Pastagem": 21,
-            "4. Área não Vegetada": 22,
-            "4.1. Infraestrutura Urbana": 24,
-            "4.2. Mineração": 30,
-            "4.3. Praia e Duna": 23,
-            "4.4. Outra Área não Vegetada": 25,
-            "5. Corpo D'água": 26,
-            "5.1. Rio, Lago e Oceano": 33,
-            "5.2. Aquicultura": 31,
-            "6. Não Observado": 27
-        }
-        setupUi()
-        self.mc = MapbiomasCollection( iface, self )
-
-    def __del__(self):
-        del self.mc
+            lyt.addLayout( lytYear )
+            lyt.addLayout( lytSlider )
+            lyt.addWidget( tree )
+            msgBar = QgsMessageBar(self)
+            lyt.addWidget( msgBar )
+            self.setLayout( lyt )
 
 
-class MapbiomasCollection(QObject):
-    nameModulus = "MapbiomasCollection"
-    def __init__(self, iface, dockWidget):
+            return {
+                'msgBar': msgBar,
+                'lblYear': lblYear,
+                'slider': slider,
+                'pbMin': pbMin,
+                'pbMax': pbMax,
+                'tree': tree,
+                'itemClasses': itemClasses
+            }
+
         super().__init__()
-        self.dockWidget = dockWidget
-        self.numGroup = 0
-        #
-        self.msgBar = iface.messageBar()
-        self.view = iface.layerTreeView()
-        self.actionDraw = iface.actionDraw()
-        self.mapCanvas = iface.mapCanvas()
+        self.layer = layer
+        self.version = data['version']
+        self.url = data['url']
+        self.minYear = data['years']['min']
+        self.maxYear = data['years']['max']
+
+        self.fileSnapshot = os.path.join( os.path.dirname(__file__), 'snapshot.tif' )
+        self.keyProperty = 'MapBiomasCollectionWidget'
+        self.valueProperty = 'layer_before'
+
+        self.mapCanvas = QgsUtils.iface.mapCanvas()
         self.project = QgsProject.instance()
         self.root = self.project.layerTreeRoot()
-        #
-        self._connect()
+        self.taskManager = QgsApplication.taskManager()
 
-    def __del__(self):
-        self._connect( False )
 
-    def _connect(self, isConnect = True):
-        signal_slot = (
-        { 'signal': self.dockWidget.btnOk.clicked, 'slot': self._runOk },
-        { 'signal': self.dockWidget.rbGroup.toggled, 'slot': self._toggledGroup },
-        { 'signal': self.view.selectionModel().selectionChanged, 'slot': self._changeLayer }
-        )
-        if isConnect:
-            for item in signal_slot:
-                item['signal'].connect( item['slot'] )
-        else:
-            for item in signal_slot:
-                item['signal'].disconnect( item['slot'] )
+        self.year, self.l_class_id = getYearClasses() # Depend self.maxYear
+        self.valueYearLayer = self.year
 
-    def _getUrlBioma(self, year, l_strClass):
-        url = 'http://workspace.mapbiomas.org/wms'
+        r = setGui( data['classes'] )
+        self.msgBar = r['msgBar']
+        self.lblYear = r['lblYear']
+        self.slider = r['slider']
+        self.pbMin = r['pbMin']
+        self.pbMax = r['pbMax']
+        self.tree = r['tree']
+        self.itemClasses = r['itemClasses']
+
+        # Connections
+        self.mapCanvas.renderComplete.connect( self.on_renderComplete )
+        self.slider.valueChanged.connect( self.on_yearChanged )
+        self.slider.sliderReleased.connect( self.on_released )
+        self.pbMin.clicked.connect( self.on_limitYear )
+        self.pbMax.clicked.connect( self.on_limitYear )
+        self.tree.itemChanged.connect( self.on_classChanged )
+
+    def _uploadSource(self):
+        """
+        Will be create Widget again, finished() -> self.layer.setDataSource
+        """
+        def finished(exception, result=None):
+            def getIndexParentLayer():
+                ltl = self.root.findLayer( self.layer )
+                parent = ltl.parent()
+                index = -1
+                for child in parent.children():
+                    index += 1
+                    if ltl == child:
+                        break
+                return index, parent
+
+            if not exception is None:
+                msg = f"Error: {exception}"
+                self.msgBar.pushMessage( msg, Qgis.Critical, 4 )
+                return
+
+            layerSnapshot = QgsRasterLayer( self.fileSnapshot, self.layer.name(), 'gdal' )
+            self.project.addMapLayer( layerSnapshot, False )
+            layerSnapshot.setCustomProperty( self.keyProperty, self.valueProperty )
+            index, parent = getIndexParentLayer()
+            ltl = parent.insertLayer( index+1, layerSnapshot )
+            ltl.setItemVisibilityChecked( True )
+
+            url = self.getUrl( self.url, self.version, self.year, self.l_class_id )
+            name = f"Collection {self.version} - {self.year}"
+            args = ( url, name, self.layer.providerType(), self.layer.dataProvider().ProviderOptions() )
+            self.layer.setDataSource( *args ) # Will be create Widget again
+
+        def createSnapshot(task):
+            def setGeoreference():
+                e = self.mapCanvas.extent()
+                imgWidth, imgHeight = image.width(), image.height()
+                resX, resY = e.width() / imgWidth, e.height() / imgHeight
+                gt = ( e.xMinimum(), resX, 0, e.yMaximum(), 0, -1 * resY )
+
+                ds = gdal.Open( self.fileSnapshot, gdal.GA_Update )
+                ds.SetGeoTransform( gt )
+                crs = self.mapCanvas.mapSettings().destinationCrs()
+                ds.SetProjection( crs.toWkt() )
+                ds = None
+
+            settings = QgsMapSettings( self.mapCanvas.mapSettings() )
+            settings.setBackgroundColor( QColor( Qt.transparent ) )
+            settings.setLayers( [ self.layer ] )
+            job = QgsMapRendererParallelJob( settings ) 
+            job.start()
+            job.waitForFinished()
+            image = job.renderedImage()
+            if bool( self.mapCanvas.property('retro') ):
+                image = image.scaled( image.width() / 3, image.height() / 3 )
+                image = image.convertToFormat( image.Format_Indexed8, Qt.OrderedDither | Qt.OrderedAlphaDither )
+            image.save( self.fileSnapshot, "TIFF", 100 ) # 100: Uncompressed
+            setGeoreference()
+
+        self.setEnabled( False )
+        self.mapCanvas.renderComplete.disconnect( self.on_renderComplete ) # It will be reconnect when create Widget again
+        msg = 'Updating...'
+        self.msgBar.pushMessage( msg, Qgis.Info, 4 )
+        task = QgsTask.fromFunction( msg, createSnapshot, on_finished=finished )
+        task.setDependentLayers( [ self.layer ] )
+        self.taskManager.addTask( task )
+
+    @staticmethod
+    def getUrl(url, version, year, l_class_id):
+        l_strClass = [ str(item) for item in l_class_id ]
         paramsWms = 'IgnoreGetFeatureInfoUrl=1&IgnoreGetMapUrl=1&crs=EPSG:3857&dpiMode=7&format=image/png&layers=coverage&styles='
-        paramsQuote = "map=wms/v/4.0/classification/coverage.map&layers=coverage&transparent=true&version=1.1.1&territory_id=10"
-        paramsQuote = urllib.parse.quote( "{}&year={}&classification_ids=".format( paramsQuote, year ) )
+        paramsQuote = f"map=wms/v/{version}/classification/coverage.map"
+        paramsQuote = f"{paramsQuote}&layers=coverage&transparent=true&version=1.1.1&territory_id=10"
+        paramsQuote = urllib.parse.quote( f"{paramsQuote}&year={year}&classification_ids=" )
         paramClassification = ','.join( l_strClass )
-        return "{}&url={}?{}{}".format( paramsWms, url, paramsQuote, paramClassification )
+        return f"{paramsWms}&url={url}?{paramsQuote}{paramClassification}"
 
-    def _addGroup(self):
-        def getLayerBiomas(year, l_strClass):
-            nameLayer = "Collection {}".format( year )
-            return QgsRasterLayer( self._getUrlBioma( year, l_strClass ), nameLayer, 'wms' )
-
-        itemsYear = self.dockWidget.listwYears.selectedItems()
-        if len( itemsYear ) == 0:
-            msg = 'Need select at least one Year'
-            self.msgBar.pushMessage( self.nameModulus, msg, Qgis.Critical )
-            return
-        else:
-            itemsYear = [ item.text() for item in itemsYear ]
-        itemsClass = self.dockWidget.listwClass.selectedItems()
-        if len( itemsClass ) == 0:
-            msg = 'Need select at least one Class'
-            self.msgBar.pushMessage( self.nameModulus, msg, Qgis.Critical )
-            return
-        # Add Group
-        self.numGroup += 1
-        name = "MapBiomas #{}".format( self.numGroup )
-        group = self.root.addGroup( name )
-        d = self.dockWidget.collection_class
-        l_strClass = [ str( d[ item.data( Qt.DisplayRole ) ] ) for item in itemsClass ]
-        for year in itemsYear:
-            layer = getLayerBiomas( year, l_strClass )
-            if layer.isValid():
-                self.project.addMapLayer( layer, addToLegend=False )
-                group.addLayer( layer ).setItemVisibilityChecked( False )
-
-    def _setCollection(self):
-        def setDataSource(layer, url):
-            '''
-            Adapted from 'Change DataSource' plugin,(C) 2014 by Enrico Ferreguti
-            '''
-            XMLDocument = QDomDocument('style')
-            XMLMapLayers = XMLDocument.createElement('maplayers')
-            XMLMapLayer = XMLDocument.createElement('maplayer')
-            context = QgsReadWriteContext()
-            layer.writeLayerXml( XMLMapLayer, XMLDocument, context )
-            # apply layer definition
-            XMLMapLayer.firstChildElement('datasource').firstChild().setNodeValue( url )
-            XMLMapLayers.appendChild( XMLMapLayer )
-            XMLDocument.appendChild( XMLMapLayers )
-            layer.readLayerXml( XMLMapLayer, context )
-
-        # Year
-        itemsYear = self.dockWidget.listwYears.selectedItems()
-        if len( itemsYear ) > 1:
-            msg = 'Please select one year only'
-            self.msgBar.pushMessage( self.nameModulus, msg, Qgis.Critical )
-            return
-        if len( itemsYear ) == 0:
-            msg = 'Need select at least one Year'
-            self.msgBar.pushMessage( self.nameModulus, msg, Qgis.Critical )
-            return
-        year = itemsYear[0].text()
-        # Class
-        itemsClass = self.dockWidget.listwClass.selectedItems()
-        if len( itemsClass ) == 0:
-            msg = 'Need select at least one Class'
-            self.msgBar.pushMessage( self.nameModulus, msg, Qgis.Critical )
-            return
-        d = self.dockWidget.collection_class
-        l_strClass = [ str( d[ item.data( Qt.DisplayRole ) ] ) for item in itemsClass ]
-        #
-        layer = self.view.currentNode().layer()
-        setDataSource( layer, self._getUrlBioma( year, l_strClass ) )
-        layer.setName( "Collection {}".format( year ) )
-        layer.reload()
-        self.actionDraw.trigger()
-        self.mapCanvas.refresh()
-        self.view.refreshLayerSymbology( layer.id() )
-
-
-    @pyqtSlot(bool)
-    def _toggledGroup(self, checked):
-        selection = QAbstractItemView.ExtendedSelection if checked else QAbstractItemView.SingleSelection
-        self.dockWidget.listwYears.setSelectionMode( selection )
-
-    @pyqtSlot('QItemSelection,QItemSelection')
-    def _changeLayer(self, selected=None, deselected=None):
-        def getYearClassLayerBioma(layer):
-            source = layer.source()
-            if source.find('http://workspace.mapbiomas.org/wms') == -1:
-                return { 'isOk': False }
-            idx = source.find('year')
-            if idx == -1:
-                return { 'isOk': False }
-            year_class = urllib.parse.unquote( source[ idx: ] ).split('&')
-            vreturn = {'isOk': True }
-            for item in year_class:
-                d = item.split('=')
-                vreturn[ d[0] ] = d[1]
-            ids_class = [ int( item ) for item in vreturn['classification_ids'].split(',') ]
-            del vreturn['classification_ids']
-            d = self.dockWidget.collection_class
-            l_class = [ k for k in d if d[k] in ids_class ]
-            vreturn['class'] = l_class
-            return vreturn
-
-        def setEnabledRbLayer(isEnabled):
-            self.dockWidget.rbLayer.setEnabled( isEnabled )
-            if not isEnabled:
-                self.dockWidget.rbGroup.setChecked( True )
-
-        def setListWidget(lstWidget, value ):
-            item = lstWidget.findItems( value, Qt.MatchExactly )[0]
-            item.setSelected( True )
-
-        node = self.view.currentNode()
-        if not isinstance( node, QgsLayerTreeLayer ):
-            setEnabledRbLayer( False )
-            return
-        r = getYearClassLayerBioma( node.layer() )
-        if not r['isOk']:
-            setEnabledRbLayer( False )
-            return
-        setEnabledRbLayer( True )
-        self.dockWidget.rbLayer.setChecked( True )
-        self.dockWidget.listwYears.setSelectionMode( QAbstractItemView.SingleSelection )
-        setListWidget( self.dockWidget.listwYears, r['year'] )
-        #
-        self.dockWidget.listwClass.clearSelection()
-        for value in r['class']:
-            setListWidget( self.dockWidget.listwClass, value )
+    @pyqtSlot('QPainter *')
+    def on_renderComplete(self, painter):
+        self.slider.setFocus()
+        # Remove layerSnapshot
+        ltl = self.root.findLayer( self.layer )
+        parent = ltl.parent()
+        hasSnapshot = lambda ltl: not ltl.layer().customProperty( self.keyProperty, None) is None
+        l_ltl = [ ltl for ltl in parent.findLayers() if hasSnapshot( ltl ) ]
+        for ltl in l_ltl:
+            filepath = ltl.layer().source()
+            parent.removeChildNode( ltl )
+            os.remove( filepath )
 
     @pyqtSlot()
-    def _runOk(self):
-        if self.dockWidget.rbLayer.isChecked():
-            self._setCollection()
-        else:
-            self._addGroup()
+    def on_released(self):
+        if self.valueYearLayer == self.year:
+            return
+
+        self._uploadSource()
+
+    @pyqtSlot(int)
+    def on_yearChanged(self, value):
+        if value == self.year:
+            return
+
+        self.yearChanged = True
+        self.year = value
+        self.lblYear.setText( str( value ) )
+        if not self.slider.isSliderDown(): # Keyboard
+            self.valueYearLayer = self.year
+            self._uploadSource()
+
+    @pyqtSlot(bool)
+    def on_limitYear(self, checked):
+        year = self.maxYear if self.sender().objectName() == 'maxYear' else self.minYear
+        if year == self.year:
+            return
+
+        self.year = year
+        self.lblYear.setText( str( self.year ) )
+        self.valueYearLayer = self.year
+        self._uploadSource()
+
+    @pyqtSlot(QTreeWidgetItem, int)
+    def on_classChanged(self, item, column):
+        value = item.data( column, Qt.UserRole)
+        status = item.checkState( column ) == Qt.Checked
+        f = self.l_class_id.append if status else self.l_class_id.remove
+        f( value )
+        self._uploadSource() # Will be create Widget again
+
+
+class LayerMapBiomasCollectionWidgetProvider(QgsLayerTreeEmbeddedWidgetProvider):
+    def __init__(self, data):
+        super().__init__()
+        self.data = data
+
+    def id(self):
+        return 'mapbiomascollection'
+
+    def name(self):
+        return "Layer MapBiomas Collection"
+
+    def createWidget(self, layer, widgetIndex):
+        return MapBiomasCollectionWidget( layer, self.data )
+
+    def supportsLayer(self, layer):
+        if not layer.providerType() == 'wms':
+            return False
+        source = urllib.parse.unquote( layer.source() ).split('&')
+        host = f"url={self.data['url']}?map=wms/v/{self.data['version']}/classification/coverage.map"
+        l_url = [ item for item in source if item.find( host ) > -1 ]
+        return len( l_url ) > 0
+
+
+class MapBiomasCollection():
+    def __init__(self):
+        def getConfig():
+            fileConfig = os.path.join( os.path.dirname(__file__), 'mapbiomascollection_pt-br.json' )
+            with open(fileConfig) as json_file:
+                data = json.load(json_file)    
+            return data
+        
+        self.data = getConfig()
+        self.widgetProvider = None
+
+    def run(self):
+        def createLayer(year, l_class_id):
+            args = ( self.data['url'], self.data['version'], year, l_class_id )
+            url = MapBiomasCollectionWidget.getUrl( *args )
+            return QgsRasterLayer( url, f"Collection {self.data['version']} - {year}", 'wms' )
+
+        def addLayer(layer):
+            project = QgsProject.instance()
+            totalEW = int( layer.customProperty('embeddedWidgets/count', 0) )
+            layer.setCustomProperty('embeddedWidgets/count', totalEW + 1 )
+            layer.setCustomProperty(f"embeddedWidgets/{totalEW}/id", self.widgetProvider.id() )
+            project.addMapLayer( layer )
+            root = project.layerTreeRoot()
+            ltl = root.findLayer( layer )
+            ltl.setExpanded(True)
+
+        # Register widgetProvider
+        self.widgetProvider = LayerMapBiomasCollectionWidgetProvider( self.data )
+        registry = QgsGui.layerTreeEmbeddedWidgetRegistry()
+        if not registry.provider( self.widgetProvider.id() ) is None:
+            registry.removeProvider( self.widgetProvider.id() )
+        registry.addProvider( self.widgetProvider )
+        # Add Layer
+        layer = createLayer(2018, [1, 10, 14, 22, 26, 27])
+        addLayer( layer )
