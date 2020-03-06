@@ -5,7 +5,7 @@ about:This plugin add layers(WMS) of collection from MapBiomas.
   After select the year and class of map, click in 'Create Group' button for add all layers inside a group.
 
 version:1.0
-qgisMinimumVersion:3.4
+qgisMinimumVersion:3.10
 
 author:Luiz Motta
 email:motta.luiz@gmail.com

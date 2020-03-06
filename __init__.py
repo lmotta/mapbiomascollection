@@ -40,7 +40,7 @@ class MapbiomasCollectionPlugin(QObject):
     super().__init__()
     self.iface = iface
     self.name = u"&MapbiomasCollection"
-    self.mc = None # 
+    self.mbc = MapBiomasCollection()
 
   def initGui(self):
     name = "Mapbiomas Collection"
@@ -55,13 +55,16 @@ class MapbiomasCollectionPlugin(QObject):
     self.iface.addToolBarIcon( self.action )
     self.iface.addPluginToMenu( self.name, self.action )
 
+    self.mbc.register()
+
   def unload(self):
     self.iface.removeToolBarIcon( self.action )
     self.iface.removePluginMenu( self.name, self.action )
     del self.action
+    if not self.mbc:
+      del self.mbc
 
   @pyqtSlot()
   def run(self):
-      self.mbc = MapBiomasCollection()
       self.mbc.run()
  

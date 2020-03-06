@@ -3,7 +3,7 @@ import urllib.parse
 
 from osgeo import gdal
 
-from qgis.PyQt.QtCore import Qt, pyqtSlot
+from qgis.PyQt.QtCore import Qt, QSettings, QLocale, pyqtSlot
 from qgis.PyQt.QtWidgets import (
     QWidget, QPushButton,
     QSlider, QLabel,
@@ -24,15 +24,10 @@ from qgis.gui import QgsGui, QgsMessageBar, QgsLayerTreeEmbeddedWidgetProvider
 
 from qgis import utils as QgsUtils
 
-def getConfigMapBiomasCollection():
-    fileConfig = os.path.join( os.path.dirname(__file__), 'mapbiomascollection.json' )
-    with open(fileConfig) as json_file:
-        data = json.load(json_file)    
-    return data
-
 
 class MapBiomasCollectionWidget(QWidget):
     nameModulus = 'MapBiomasCollection'
+    fileSnapshot = os.path.join( os.path.dirname(__file__), 'snapshot.tif' )
     def __init__(self, layer, data):
         def getYearClasses():
             def getYear():
@@ -149,12 +144,12 @@ class MapBiomasCollectionWidget(QWidget):
 
         super().__init__()
         self.layer = layer
+        self.startLayer = True
         self.version = data['version']
         self.url = data['url']
         self.minYear = data['years']['min']
         self.maxYear = data['years']['max']
 
-        self.fileSnapshot = os.path.join( os.path.dirname(__file__), 'snapshot.tif' )
         self.keyProperty = 'MapBiomasCollectionWidget'
         self.valueProperty = 'layer_before'
 
@@ -162,7 +157,6 @@ class MapBiomasCollectionWidget(QWidget):
         self.project = QgsProject.instance()
         self.root = self.project.layerTreeRoot()
         self.taskManager = QgsApplication.taskManager()
-
 
         self.year, self.l_class_id = getYearClasses() # Depend self.maxYear
         self.valueYearLayer = self.year
@@ -177,7 +171,7 @@ class MapBiomasCollectionWidget(QWidget):
         self.itemClasses = r['itemClasses']
 
         # Connections
-        self.mapCanvas.renderComplete.connect( self.on_renderComplete )
+        self.mapCanvas.mapCanvasRefreshed.connect( self.on_mapCanvasRefreshed )
         self.slider.valueChanged.connect( self.on_yearChanged )
         self.slider.sliderReleased.connect( self.on_released )
         self.pbMin.clicked.connect( self.on_limitYear )
@@ -214,6 +208,7 @@ class MapBiomasCollectionWidget(QWidget):
             url = self.getUrl( self.url, self.version, self.year, self.l_class_id )
             name = f"Collection {self.version} - {self.year}"
             args = ( url, name, self.layer.providerType(), self.layer.dataProvider().ProviderOptions() )
+            self.startLayer = False
             self.layer.setDataSource( *args ) # Will be create Widget again
 
         def createSnapshot(task):
@@ -243,7 +238,7 @@ class MapBiomasCollectionWidget(QWidget):
             setGeoreference()
 
         self.setEnabled( False )
-        self.mapCanvas.renderComplete.disconnect( self.on_renderComplete ) # It will be reconnect when create Widget again
+        self.mapCanvas.mapCanvasRefreshed.disconnect( self.on_mapCanvasRefreshed ) # It will be reconnect when create Widget again
         msg = 'Updating...'
         self.msgBar.pushMessage( msg, Qgis.Info, 4 )
         task = QgsTask.fromFunction( msg, createSnapshot, on_finished=finished )
@@ -260,18 +255,18 @@ class MapBiomasCollectionWidget(QWidget):
         paramClassification = ','.join( l_strClass )
         return f"{paramsWms}&url={url}?{paramsQuote}{paramClassification}"
 
-    @pyqtSlot('QPainter *')
-    def on_renderComplete(self, painter):
+    @pyqtSlot()
+    def on_mapCanvasRefreshed(self):
         self.slider.setFocus()
-        # Remove layerSnapshot
+        # Remove layerSnapshot if create Widget again
+        if not self.startLayer:
+            return
         ltl = self.root.findLayer( self.layer )
         parent = ltl.parent()
         hasSnapshot = lambda ltl: not ltl.layer().customProperty( self.keyProperty, None) is None
         l_ltl = [ ltl for ltl in parent.findLayers() if hasSnapshot( ltl ) ]
         for ltl in l_ltl:
-            filepath = ltl.layer().source()
             parent.removeChildNode( ltl )
-            os.remove( filepath )
 
     @pyqtSlot()
     def on_released(self):
@@ -338,13 +333,41 @@ class LayerMapBiomasCollectionWidgetProvider(QgsLayerTreeEmbeddedWidgetProvider)
 class MapBiomasCollection():
     def __init__(self):
         def getConfig():
-            fileConfig = os.path.join( os.path.dirname(__file__), 'mapbiomascollection_pt-br.json' )
+            def existLocaleConfig():
+                overrideLocale = QSettings().value('locale/overrideFlag', False, type=bool)
+                locale = QLocale.system().name() if not overrideLocale else QSettings().value('locale/userLocale', '')
+                name = f_name.format( locale=locale )
+                fileConfig = os.path.join( dirname, name )
+                if os.path.exists( fileConfig ):
+                    return { 'isOk': True, 'fileConfig': fileConfig }
+                return { 'isOk': False }
+
+            f_name = "mapbiomascollection_{locale}.json"
+            dirname = os.path.dirname(__file__)
+            r = existLocaleConfig()
+            if r['isOk']:
+                fileConfig = r['fileConfig']
+            else:
+                name = f_name.format( locale='en_US')
+                fileConfig = os.path.join( dirname, name )
+
             with open(fileConfig) as json_file:
                 data = json.load(json_file)    
             return data
-        
+
         self.data = getConfig()
         self.widgetProvider = None
+
+    def __del__(self):
+        if os.path.exists( MapBiomasCollectionWidget.fileSnapshot ):
+            os.remove( MapBiomasCollectionWidget.fileSnapshot )
+
+    def register(self):
+        self.widgetProvider = LayerMapBiomasCollectionWidgetProvider( self.data )
+        registry = QgsGui.layerTreeEmbeddedWidgetRegistry()
+        if not registry.provider( self.widgetProvider.id() ) is None:
+            registry.removeProvider( self.widgetProvider.id() )
+        registry.addProvider( self.widgetProvider )
 
     def run(self):
         def createLayer(year, l_class_id):
@@ -362,12 +385,5 @@ class MapBiomasCollection():
             ltl = root.findLayer( layer )
             ltl.setExpanded(True)
 
-        # Register widgetProvider
-        self.widgetProvider = LayerMapBiomasCollectionWidgetProvider( self.data )
-        registry = QgsGui.layerTreeEmbeddedWidgetRegistry()
-        if not registry.provider( self.widgetProvider.id() ) is None:
-            registry.removeProvider( self.widgetProvider.id() )
-        registry.addProvider( self.widgetProvider )
-        # Add Layer
         layer = createLayer(2018, [1, 10, 14, 22, 26, 27])
         addLayer( layer )
