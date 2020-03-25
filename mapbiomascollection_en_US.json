@@ -1,5 +1,5 @@
 {
-    "version": "4.0",
+    "version": "4.1",
     "url": "http://workspace.mapbiomas.org/wms",
     "years": { "min": 1985, "max": 2018},
     "classes": {

@@ -3,7 +3,10 @@ import urllib.parse
 
 from osgeo import gdal
 
-from qgis.PyQt.QtCore import Qt, QSettings, QLocale, pyqtSlot
+from qgis.PyQt.QtCore import (
+    Qt, QSettings, QLocale,
+    QObject, pyqtSlot, pyqtSignal
+)
 from qgis.PyQt.QtWidgets import (
     QWidget, QPushButton,
     QSlider, QLabel,
@@ -15,19 +18,13 @@ from qgis.PyQt.QtGui import (
 )
 
 from qgis.core import (
-    QgsApplication, Qgis, QgsProject,
-    QgsRasterLayer,
-    QgsMapSettings,
-    QgsTask, QgsMapRendererParallelJob
+    Qgis, QgsProject,
+    QgsRasterLayer
 )
 from qgis.gui import QgsGui, QgsMessageBar, QgsLayerTreeEmbeddedWidgetProvider
 
-from qgis import utils as QgsUtils
-
 
 class MapBiomasCollectionWidget(QWidget):
-    FILEPATH_SNAPSHOT = os.path.join( os.path.dirname(__file__), 'snapshot.tif' )
-
     @staticmethod
     def getUrl(url, version, year, l_class_id):
         l_strClass = [ str(item) for item in l_class_id ]
@@ -159,13 +156,8 @@ class MapBiomasCollectionWidget(QWidget):
         self.minYear = data['years']['min']
         self.maxYear = data['years']['max']
 
-        self.keyProperty = 'MapBiomasCollectionWidget'
-        self.valueProperty = 'layer_before'
-
-        self.mapCanvas = QgsUtils.iface.mapCanvas()
         self.project = QgsProject.instance()
         self.root = self.project.layerTreeRoot()
-        self.taskManager = QgsApplication.taskManager()
 
         self.year, self.l_class_id = getYearClasses() # Depend self.maxYear
         self.valueYearLayer = self.year
@@ -180,7 +172,6 @@ class MapBiomasCollectionWidget(QWidget):
         self.itemClasses = r['itemClasses']
 
         # Connections
-        self.mapCanvas.mapCanvasRefreshed.connect( self.on_mapCanvasRefreshed )
         self.slider.valueChanged.connect( self.on_yearChanged )
         self.slider.sliderReleased.connect( self.on_released )
         self.pbMin.clicked.connect( self.on_limitYear )
@@ -188,85 +179,24 @@ class MapBiomasCollectionWidget(QWidget):
         self.tree.itemChanged.connect( self.on_classChanged )
 
     def _uploadSource(self):
-        """
-        Will be create Widget again, finished() -> self.layer.setDataSource
-        """
-        def finished(exception, result=None):
-            def getIndexParentLayer():
-                ltl = self.root.findLayer( self.layer )
-                parent = ltl.parent()
-                index = -1
-                for child in parent.children():
-                    index += 1
-                    if ltl == child:
-                        break
-                return index, parent
-
-            if not exception is None:
-                msg = f"Error: {exception}"
-                self.msgBar.pushMessage( msg, Qgis.Critical, 4 )
-                return
-
-            layerSnapshot = QgsRasterLayer( self.FILEPATH_SNAPSHOT, self.layer.name(), 'gdal' )
-            self.project.addMapLayer( layerSnapshot, False )
-            layerSnapshot.setCustomProperty( self.keyProperty, self.valueProperty )
-            index, parent = getIndexParentLayer()
-            ltl = parent.insertLayer( index+1, layerSnapshot )
-            ltl.setItemVisibilityChecked( True )
-
+        def checkDataSource():
             url = self.getUrl( self.url, self.version, self.year, self.l_class_id )
             name = f"Collection {self.version} - {self.year}"
-            args = ( url, name, self.layer.providerType(), self.layer.dataProvider().ProviderOptions() )
-            #self.mapCanvas.mapCanvasRefreshed.connect( self.on_mapCanvasRefreshed )
-            self.layer.setDataSource( *args ) # Will be create Widget again
-
-        def createSnapshot(task):
-            def setGeoreference():
-                e = self.mapCanvas.extent()
-                imgWidth, imgHeight = image.width(), image.height()
-                resX, resY = e.width() / imgWidth, e.height() / imgHeight
-                gt = ( e.xMinimum(), resX, 0, e.yMaximum(), 0, -1 * resY )
-
-                ds = gdal.Open( self.FILEPATH_SNAPSHOT, gdal.GA_Update )
-                ds.SetGeoTransform( gt )
-                crs = self.mapCanvas.mapSettings().destinationCrs()
-                ds.SetProjection( crs.toWkt() )
-                ds = None
-
-            settings = QgsMapSettings( self.mapCanvas.mapSettings() )
-            settings.setBackgroundColor( QColor( Qt.transparent ) )
-            settings.setLayers( [ self.layer ] )
-            job = QgsMapRendererParallelJob( settings ) 
-            job.start()
-            job.waitForFinished()
-            image = job.renderedImage()
-            if bool( self.mapCanvas.property('retro') ):
-                image = image.scaled( image.width() / 3, image.height() / 3 )
-                image = image.convertToFormat( image.Format_Indexed8, Qt.OrderedDither | Qt.OrderedAlphaDither )
-            image.save( self.FILEPATH_SNAPSHOT, "TIFF", 100 ) # 100: Uncompressed
-            setGeoreference()
+            args = [ url, name, self.layer.providerType() ]
+            layer = QgsRasterLayer( *args )
+            if not layer.isValid():
+                msg = f"Error server {self.url}"
+                return { 'isOk': False, 'message': msg }
+            args += [ self.layer.dataProvider().ProviderOptions() ]
+            return { 'isOk': True, 'args': args }
 
         self.setEnabled( False )
-        msg = 'Updating...'
-        self.msgBar.pushMessage( msg, Qgis.Info, 0 )
-        self.mapCanvas.mapCanvasRefreshed.disconnect( self.on_mapCanvasRefreshed )
-        task = QgsTask.fromFunction( msg, createSnapshot, on_finished=finished )
-        task.setDependentLayers( [ self.layer ] )
-        self.taskManager.addTask( task )
-
-    @pyqtSlot()
-    def on_mapCanvasRefreshed(self):
-        def getSnapshots():
-            ltl = self.root.findLayer( self.layer )
-            parent = ltl.parent()
-            hasSnapshot = lambda ltl: not ltl.layer().customProperty( self.keyProperty, None) is None
-            return [ ltl for ltl in parent.findLayers() if hasSnapshot( ltl ) ], parent
-
-        self.slider.setFocus()
-        snapshots, parent = getSnapshots()
-        if snapshots:
-            for ltl in snapshots: parent.removeChildNode( ltl )
-            self.msgBar.popWidget()
+        r = checkDataSource()
+        if not r['isOk']:
+            self.msgBar.pushMessage( r['message'], Qgis.Critical, 4 )
+            self.setEnabled( True )
+            return
+        self.layer.setDataSource( *r['args'] ) # The Widget will be create agai
 
     @pyqtSlot()
     def on_released(self):
@@ -304,7 +234,7 @@ class MapBiomasCollectionWidget(QWidget):
         status = item.checkState( column ) == Qt.Checked
         f = self.l_class_id.append if status else self.l_class_id.remove
         f( value )
-        self._uploadSource() # Will be create Widget again
+        self._uploadSource()
 
 
 class LayerMapBiomasCollectionWidgetProvider(QgsLayerTreeEmbeddedWidgetProvider):
@@ -330,8 +260,9 @@ class LayerMapBiomasCollectionWidgetProvider(QgsLayerTreeEmbeddedWidgetProvider)
         return len( l_url ) > 0
 
 
-class MapBiomasCollection():
-    def __init__(self):
+class MapBiomasCollection(QObject):
+    MODULE = 'MapBiomasCollection'
+    def __init__(self, iface):
         def getConfig():
             def existLocaleConfig():
                 overrideLocale = QSettings().value('locale/overrideFlag', False, type=bool)
@@ -355,12 +286,11 @@ class MapBiomasCollection():
                 data = json.load(json_file)    
             return data
 
+        super().__init__()        
+        self.msgBar = iface.messageBar()
+        self.root = QgsProject.instance().layerTreeRoot()
         self.data = getConfig()
         self.widgetProvider = None
-
-    def __del__(self):
-        if os.path.exists( MapBiomasCollectionWidget.FILEPATH_SNAPSHOT ):
-            os.remove( MapBiomasCollectionWidget.FILEPATH_SNAPSHOT )
 
     def register(self):
         self.widgetProvider = LayerMapBiomasCollectionWidgetProvider( self.data )
@@ -386,4 +316,8 @@ class MapBiomasCollection():
             ltl.setExpanded(True)
 
         layer = createLayer(2018, [1, 10, 14, 22, 26, 27])
+        if not layer.isValid():
+            msg = f"Error server: {self.data['url']} "
+            self.msgBar.pushCritical( self.MODULE, msg )
+            return
         addLayer( layer )

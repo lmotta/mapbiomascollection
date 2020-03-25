@@ -40,7 +40,7 @@ class MapbiomasCollectionPlugin(QObject):
     super().__init__()
     self.iface = iface
     self.name = u"&MapbiomasCollection"
-    self.mbc = MapBiomasCollection()
+    self.mbc = MapBiomasCollection( iface )
 
   def initGui(self):
     name = "Mapbiomas Collection"

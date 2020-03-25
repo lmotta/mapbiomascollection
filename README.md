@@ -12,7 +12,7 @@ This plugin lets you get collection of mapping from MapBiomas Project.
 Luiz Motta
 
 ## Changelog
-- 2020-03-06
+- 2020-03-25
 Changed Docwidget to WidgetProvider(legend)
 - 2019-09-05
 Add set for collection layer
