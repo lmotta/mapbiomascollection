@@ -19,7 +19,7 @@ repository:https://github.com/lmotta/mapbiomascollection
 
 icon:mapbiomas.svg
 
-experimental:True
+experimental:False
 deprecated:False
 
 changelog: 1.0(2020-03-25)
