@@ -1,4 +1,4 @@
-import os, json
+import os, time, json
 import urllib.parse
 
 from osgeo import gdal
@@ -26,8 +26,18 @@ from qgis import utils as QgsUtils
 
 
 class MapBiomasCollectionWidget(QWidget):
-    nameModulus = 'MapBiomasCollection'
-    fileSnapshot = os.path.join( os.path.dirname(__file__), 'snapshot.tif' )
+    FILEPATH_SNAPSHOT = os.path.join( os.path.dirname(__file__), 'snapshot.tif' )
+
+    @staticmethod
+    def getUrl(url, version, year, l_class_id):
+        l_strClass = [ str(item) for item in l_class_id ]
+        paramsWms = 'IgnoreGetFeatureInfoUrl=1&IgnoreGetMapUrl=1&crs=EPSG:3857&dpiMode=7&format=image/png&layers=coverage&styles='
+        paramsQuote = f"map=wms/v/{version}/classification/coverage.map"
+        paramsQuote = f"{paramsQuote}&layers=coverage&transparent=true&version=1.1.1&territory_id=10"
+        paramsQuote = urllib.parse.quote( f"{paramsQuote}&year={year}&classification_ids=" )
+        paramClassification = ','.join( l_strClass )
+        return f"{paramsWms}&url={url}?{paramsQuote}{paramClassification}"
+
     def __init__(self, layer, data):
         def getYearClasses():
             def getYear():
@@ -144,7 +154,6 @@ class MapBiomasCollectionWidget(QWidget):
 
         super().__init__()
         self.layer = layer
-        self.startLayer = True
         self.version = data['version']
         self.url = data['url']
         self.minYear = data['years']['min']
@@ -198,7 +207,7 @@ class MapBiomasCollectionWidget(QWidget):
                 self.msgBar.pushMessage( msg, Qgis.Critical, 4 )
                 return
 
-            layerSnapshot = QgsRasterLayer( self.fileSnapshot, self.layer.name(), 'gdal' )
+            layerSnapshot = QgsRasterLayer( self.FILEPATH_SNAPSHOT, self.layer.name(), 'gdal' )
             self.project.addMapLayer( layerSnapshot, False )
             layerSnapshot.setCustomProperty( self.keyProperty, self.valueProperty )
             index, parent = getIndexParentLayer()
@@ -208,7 +217,7 @@ class MapBiomasCollectionWidget(QWidget):
             url = self.getUrl( self.url, self.version, self.year, self.l_class_id )
             name = f"Collection {self.version} - {self.year}"
             args = ( url, name, self.layer.providerType(), self.layer.dataProvider().ProviderOptions() )
-            self.startLayer = False
+            #self.mapCanvas.mapCanvasRefreshed.connect( self.on_mapCanvasRefreshed )
             self.layer.setDataSource( *args ) # Will be create Widget again
 
         def createSnapshot(task):
@@ -218,7 +227,7 @@ class MapBiomasCollectionWidget(QWidget):
                 resX, resY = e.width() / imgWidth, e.height() / imgHeight
                 gt = ( e.xMinimum(), resX, 0, e.yMaximum(), 0, -1 * resY )
 
-                ds = gdal.Open( self.fileSnapshot, gdal.GA_Update )
+                ds = gdal.Open( self.FILEPATH_SNAPSHOT, gdal.GA_Update )
                 ds.SetGeoTransform( gt )
                 crs = self.mapCanvas.mapSettings().destinationCrs()
                 ds.SetProjection( crs.toWkt() )
@@ -234,39 +243,30 @@ class MapBiomasCollectionWidget(QWidget):
             if bool( self.mapCanvas.property('retro') ):
                 image = image.scaled( image.width() / 3, image.height() / 3 )
                 image = image.convertToFormat( image.Format_Indexed8, Qt.OrderedDither | Qt.OrderedAlphaDither )
-            image.save( self.fileSnapshot, "TIFF", 100 ) # 100: Uncompressed
+            image.save( self.FILEPATH_SNAPSHOT, "TIFF", 100 ) # 100: Uncompressed
             setGeoreference()
 
         self.setEnabled( False )
-        self.mapCanvas.mapCanvasRefreshed.disconnect( self.on_mapCanvasRefreshed ) # It will be reconnect when create Widget again
         msg = 'Updating...'
-        self.msgBar.pushMessage( msg, Qgis.Info, 4 )
+        self.msgBar.pushMessage( msg, Qgis.Info, 0 )
+        self.mapCanvas.mapCanvasRefreshed.disconnect( self.on_mapCanvasRefreshed )
         task = QgsTask.fromFunction( msg, createSnapshot, on_finished=finished )
         task.setDependentLayers( [ self.layer ] )
         self.taskManager.addTask( task )
 
-    @staticmethod
-    def getUrl(url, version, year, l_class_id):
-        l_strClass = [ str(item) for item in l_class_id ]
-        paramsWms = 'IgnoreGetFeatureInfoUrl=1&IgnoreGetMapUrl=1&crs=EPSG:3857&dpiMode=7&format=image/png&layers=coverage&styles='
-        paramsQuote = f"map=wms/v/{version}/classification/coverage.map"
-        paramsQuote = f"{paramsQuote}&layers=coverage&transparent=true&version=1.1.1&territory_id=10"
-        paramsQuote = urllib.parse.quote( f"{paramsQuote}&year={year}&classification_ids=" )
-        paramClassification = ','.join( l_strClass )
-        return f"{paramsWms}&url={url}?{paramsQuote}{paramClassification}"
-
     @pyqtSlot()
     def on_mapCanvasRefreshed(self):
+        def getSnapshots():
+            ltl = self.root.findLayer( self.layer )
+            parent = ltl.parent()
+            hasSnapshot = lambda ltl: not ltl.layer().customProperty( self.keyProperty, None) is None
+            return [ ltl for ltl in parent.findLayers() if hasSnapshot( ltl ) ], parent
+
         self.slider.setFocus()
-        # Remove layerSnapshot if create Widget again
-        if not self.startLayer:
-            return
-        ltl = self.root.findLayer( self.layer )
-        parent = ltl.parent()
-        hasSnapshot = lambda ltl: not ltl.layer().customProperty( self.keyProperty, None) is None
-        l_ltl = [ ltl for ltl in parent.findLayers() if hasSnapshot( ltl ) ]
-        for ltl in l_ltl:
-            parent.removeChildNode( ltl )
+        snapshots, parent = getSnapshots()
+        if snapshots:
+            for ltl in snapshots: parent.removeChildNode( ltl )
+            self.msgBar.popWidget()
 
     @pyqtSlot()
     def on_released(self):
@@ -359,8 +359,8 @@ class MapBiomasCollection():
         self.widgetProvider = None
 
     def __del__(self):
-        if os.path.exists( MapBiomasCollectionWidget.fileSnapshot ):
-            os.remove( MapBiomasCollectionWidget.fileSnapshot )
+        if os.path.exists( MapBiomasCollectionWidget.FILEPATH_SNAPSHOT ):
+            os.remove( MapBiomasCollectionWidget.FILEPATH_SNAPSHOT )
 
     def register(self):
         self.widgetProvider = LayerMapBiomasCollectionWidgetProvider( self.data )
