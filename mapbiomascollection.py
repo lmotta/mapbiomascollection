@@ -18,8 +18,10 @@ from qgis.PyQt.QtGui import (
 )
 
 from qgis.core import (
-    Qgis, QgsProject,
-    QgsRasterLayer
+    QgsApplication, Qgis, QgsProject,
+    QgsRasterLayer,
+    QgsTask
+
 )
 from qgis.gui import QgsGui, QgsMessageBar, QgsLayerTreeEmbeddedWidgetProvider
 
@@ -289,6 +291,7 @@ class MapBiomasCollection(QObject):
         super().__init__()        
         self.msgBar = iface.messageBar()
         self.root = QgsProject.instance().layerTreeRoot()
+        self.taskManager = QgsApplication.taskManager()
         self.data = getConfig()
         self.widgetProvider = None
 
@@ -300,12 +303,25 @@ class MapBiomasCollection(QObject):
         registry.addProvider( self.widgetProvider )
 
     def run(self):
-        def createLayer(year, l_class_id):
+        def createLayer(task, year, l_class_id):
             args = ( self.data['url'], self.data['version'], year, l_class_id )
             url = MapBiomasCollectionWidget.getUrl( *args )
-            return QgsRasterLayer( url, f"Collection {self.data['version']} - {year}", 'wms' )
+            return ( url, f"Collection {self.data['version']} - {year}", 'wms' )
 
-        def addLayer(layer):
+        def finished(exception, result=None):
+            self.msgBar.clearWidgets()
+            if not exception is None:
+                msg = f"Error: Exception: {exception}"
+                self.msgBar.pushMessage( self.MODULE, msg, Qgis.Critical, 4 )
+                return
+            layer = QgsRasterLayer( *result )
+            if not layer.isValid():
+                source = urllib.parse.unquote( layer.source() ).split('&')
+                url = [ v for v in source if v.split('=')[0] == 'url' ][0]
+                msg = f"Error server: Get {url}"
+                self.msgBar.pushCritical( self.MODULE, msg )
+                return
+
             project = QgsProject.instance()
             totalEW = int( layer.customProperty('embeddedWidgets/count', 0) )
             layer.setCustomProperty('embeddedWidgets/count', totalEW + 1 )
@@ -315,9 +331,16 @@ class MapBiomasCollection(QObject):
             ltl = root.findLayer( layer )
             ltl.setExpanded(True)
 
-        layer = createLayer(2018, [1, 10, 14, 22, 26, 27])
-        if not layer.isValid():
-            msg = f"Error server: {self.data['url']} "
-            self.msgBar.pushCritical( self.MODULE, msg )
-            return
-        addLayer( layer )
+        msg = f"Adding layer collection from {self.data['url']}"
+        msg = f"{msg}(version {self.data['version']})..."
+        self.msgBar.pushMessage( self.MODULE, msg, Qgis.Info, 0 )
+        # Task
+        args = {
+            'description': self.MODULE,
+            'function': createLayer,
+            'year': 2018,
+            'l_class_id': [1, 10, 14, 22, 26, 27],
+            'on_finished': finished
+        }
+        task = QgsTask.fromFunction( **args )
+        self.taskManager.addTask( task )
