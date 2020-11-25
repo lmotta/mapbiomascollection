@@ -3,11 +3,11 @@ name: MapBiomas Collection
 description: This plugin lets you get collection of mapping from MapBiomas Project(http://mapbiomas.org/).
 about:This plugin add layers(WMS) of collection from MapBiomas.
 
-version:1.0
+version:1.1
 qgisMinimumVersion:3.10
 
-author:Luiz Motta
-email:motta.luiz@gmail.com
+author:Luiz Motta, Luiz Cortinhas
+email:motta.luiz@gmail.com, luiz.cortinhas@solved.eco.br
 
 category:Web
 
@@ -22,7 +22,8 @@ icon:mapbiomas.svg
 experimental:False
 deprecated:False
 
-changelog: 1.0(2020-03-25)
+changelog: - 1.1(2020-10-28) Mapbiomas changed from Geoserver to MapServer
+  - 1.0(2020-03-25)
   Changed Docwidget to WidgetProvider(legend)
   - 0.3(2019-09-05)
   Add set for collection layer

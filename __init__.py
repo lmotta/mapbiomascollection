@@ -3,9 +3,9 @@
 /***************************************************************************
 Name                 : MapBiomas Collection
 Description          : This plugin lets you get collection of mapping from MapBiomas Project(http://mapbiomas.org/).
-Date                 : August, 2019
-copyright            : (C) 2019 by Luiz Motta
-email                : motta.luiz@gmail.com
+Date                 : August, 2020
+copyright            : (C) 2019 by Luiz Motta, Updated by Luiz Cortinhas (2020)
+email                : motta.luiz@gmail.com, luiz.cortinhas@solved.eco.br
 
  ***************************************************************************/
 
@@ -18,11 +18,10 @@ email                : motta.luiz@gmail.com
  *                                                                         *
  ***************************************************************************/
 """
-__author__ = 'Luiz Motta'
-__date__ = '2019-08-28'
-__copyright__ = '(C) 2019, Luiz Motta'
+__author__ = 'Luiz Cortinhas, Luiz Motta'
+__date__ = '2020-10-28'
+__copyright__ = '(C) 2020, Luiz Cortinhas (Fork: 2019, Luiz Motta)'
 __revision__ = '$Format:%H$'
-
 
 import os
 
