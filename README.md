@@ -9,9 +9,11 @@
 This plugin lets you get collection of mapping from MapBiomas Project.
 
 ## Author
-Luiz Motta
+Luiz Motta, Luiz Cortinhas
 
 ## Changelog
+- 2020-11-26
+Updated to new Map Server and SLD style
 - 2020-03-25
 Changed Docwidget to WidgetProvider(legend)
 - 2019-09-05
