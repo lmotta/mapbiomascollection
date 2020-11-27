@@ -92,7 +92,19 @@ class MapBiomasCollectionWidget(QWidget):
             env = env + f'{classID}:{color};'
         #env=1:00FF00;2:triangle;3:12
         #crs=EPSG:3857&dpiMode=7&format=image/png&layers=mapbiomas&styles&url=http://azure.solved.eco.br:8080/geoserver/solved/wms
-        paramsWms = f'IgnoreGetFeatureInfoUrl=1&IgnoreGetMapUrl=1&service=WMS&styles=solved:mapbiomas_legend&request=GetMap&format=image/png8&layers=mapbiomas_{year}&crs=EPSG:4326'
+        params = {
+            'IgnoreGetFeatureInfoUrl': '1',
+            'IgnoreGetMapUrl': '1',
+            'service': 'WMS',
+            #'styles': 'solved:mapbiomas_legend',
+            'styles': '',
+            'request': 'GetMap',
+            'format': 'image/png', # image/png8
+            'layers': f"mapbiomas_{year}",
+            'crs': 'EPSG:4326'
+        }
+        paramsWms = '&'.join( [ f"{k}={v}" for k,v in params.items() ] )
+        #paramsWms = f'IgnoreGetFeatureInfoUrl=1&IgnoreGetMapUrl=1&service=WMS&styles=solved:mapbiomas_legend&request=GetMap&format=image/png8&layers=mapbiomas_{year}&crs=EPSG:4326'
         #'IgnoreGetFeatureInfoUrl=1&IgnoreGetMapUrl=1&crs=EPSG:3857&dpiMode=7&format=image/png&layers=coverage&styles='
         paramsQuote = f""
         paramsQuote = f"{paramsQuote}&transparent=true&version=1.1.1"

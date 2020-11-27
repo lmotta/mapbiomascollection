@@ -1,4 +1,5 @@
-﻿plugin_dir=$( basename $( pwd ) )
+﻿#!/bin/bash
+plugin_dir=$( basename $( pwd ) )
 if [ -f "./$plugin_dir.zip" ]; then
   rm "./$plugin_dir.zip"
 fi
