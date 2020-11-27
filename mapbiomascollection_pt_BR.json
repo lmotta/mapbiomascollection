@@ -1,7 +1,7 @@
 {
-    "version": "4.1",
-    "url": "http://workspace.mapbiomas.org/wms",
-    "years": { "min": 1985, "max": 2018},
+    "version": "5.0",
+    "url": "http://azure.solved.eco.br:8080/geoserver/solved/wms",
+    "years": { "min": 1985, "max": 2017},
     "classes": {
         "Floresta": {
             "id": 1, "color": { "r": 18, "g": 153, "b": 18 },
