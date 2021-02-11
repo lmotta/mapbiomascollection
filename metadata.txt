@@ -22,7 +22,8 @@ icon:mapbiomas.svg
 experimental:False
 deprecated:False
 
-changelog: - 1.1(2020-10-28) Mapbiomas changed from Geoserver to MapServer
+changelog: - 1.2(2020-10-28) added 2018 and 2019
+  - 1.1(2020-10-28) Mapbiomas changed from Geoserver to MapServer
   - 1.0(2020-03-25)
   Changed Docwidget to WidgetProvider(legend)
   - 0.3(2019-09-05)

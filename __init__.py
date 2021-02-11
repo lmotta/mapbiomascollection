@@ -19,8 +19,8 @@ email                : motta.luiz@gmail.com, luiz.cortinhas@solved.eco.br
  ***************************************************************************/
 """
 __author__ = 'Luiz Cortinhas, Luiz Motta'
-__date__ = '2020-10-28'
-__copyright__ = '(C) 2020, Luiz Cortinhas (Fork: 2019, Luiz Motta)'
+__date__ = '2021-02-11'
+__copyright__ = '(C) 2021, Luiz Cortinhas (Fork: 2019, Luiz Motta)'
 __revision__ = '$Format:%H$'
 
 import os

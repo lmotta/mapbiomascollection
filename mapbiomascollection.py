@@ -46,7 +46,7 @@ class MapBiomasCollectionWidget(QWidget):
 				17:{'color':'000000','parent':0,'status':False},
 				18:{'color':'E974ED','parent':14,'status':False},
 				19:{'color':'D5A6BD','parent':18,'status':False},
-				20:{'color':'C27BA0','parent':18,'status':False},
+				20:{'color':'C27BA0','parent':19,'status':False},
 				21:{'color':'FFEFC3','parent':14,'status':False},
 				22:{'color':'EA9999','parent':0,'status':False},
 				23:{'color':'DD7E6B','parent':22,'status':False},
@@ -62,12 +62,12 @@ class MapBiomasCollectionWidget(QWidget):
 				33:{'color':'0000FF','parent':26,'status':False},
 				34:{'color':'000000','parent':0,'status':False},
 				35:{'color':'000000','parent':0,'status':False},
-				36:{'color':'f3b4f1','parent':0,'status':False},
+				36:{'color':'f3b4f1','parent':18,'status':False},
 				37:{'color':'000000','parent':0,'status':False},
 				38:{'color':'000000','parent':0,'status':False},
-				39:{'color':'c59ff4','parent':0,'status':False},
+				39:{'color':'c59ff4','parent':19,'status':False},
 				40:{'color':'000000','parent':0,'status':False},
-				41:{'color':'e787f8','parent':0,'status':False}}
+				41:{'color':'e787f8','parent':19,'status':False}}
     @staticmethod
     def getParentColor(item):
         if item['parent'] == 0 and item['status'] == False:
@@ -99,7 +99,7 @@ class MapBiomasCollectionWidget(QWidget):
         paramsQuote = urllib.parse.quote( f"{paramsQuote}&exceptions=application/vnd.ogc.se_inimage&years={year}&{env}&classification_ids=" )# a ordem importa
         paramClassification = ','.join( l_strClass )
         msg = f"{paramsWms}&url={url}?{paramsQuote}{paramClassification}"
-        warnings.warn(msg)
+        #warnings.warn(msg)
         return f"{paramsWms}&url={url}?{paramsQuote}{paramClassification}"
 
     def __init__(self, layer, data):
@@ -110,9 +110,11 @@ class MapBiomasCollectionWidget(QWidget):
 
             def getClasses():
                 values = [ item for item in paramsSource if item.find('classification_ids=') > -1 ]
-                return [1,10,14,22,26,27] \
-                    if not len( values ) == 1 \
-                    else [ int( item ) for item in values[0].split('=')[1].split(',') ]
+                warnings.warn(str(values))
+                if (not len( values ) == 1) or (values[0] == 'classification_ids='):
+                    return [] 
+                else :
+                    return [ int( item ) for item in values[0].split('=')[1].split(',') ]
 
             paramsSource = urllib.parse.unquote( self.layer.source() ).split('&')
             return getYear(), getClasses()
@@ -330,7 +332,7 @@ class LayerMapBiomasCollectionWidgetProvider(QgsLayerTreeEmbeddedWidgetProvider)
         print('Here')
         host = f"url={self.data['url']}?map=wms/v/{self.data['version']}/classification/coverage.map"
         print(host)
-        warnings.warn(host)
+        #warnings.warn(host)
         l_url = [ item for item in source if item.find( host ) > -1 ]
         return len( l_url ) > 0
 
@@ -378,9 +380,9 @@ class MapBiomasCollection(QObject):
     def run(self):
         def createLayer(task, year, l_class_id):
             args = ( self.data['url'], self.data['version'], year, l_class_id )
-            warnings.warn( self.data['url'])
+            #warnings.warn( self.data['url'])
             url = MapBiomasCollectionWidget.getUrl( *args )
-            warnings.warn(url)
+            #warnings.warn(url)
             return ( url, f"Collection {self.data['version']} - {year}", 'wms' )
 
         def finished(exception, result=None):
