@@ -19,6 +19,8 @@ This plugin lets you get collection of mapping from MapBiomas Project.
 Luiz Motta, Luiz Cortinhas
 
 ## Changelog
+- 2021-03-01
+Added 2018 and 2019
 - 2020-11-26
 Updated to new Map Server and SLD style
 - 2020-03-25

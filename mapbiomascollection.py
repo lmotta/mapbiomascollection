@@ -446,7 +446,7 @@ class MapBiomasCollection(QObject):
         args = {
             'description': self.MODULE,
             'function': createLayer,
-            'year': 2017,
+            'year': self.data['years']['max'],
             'l_class_id': [1, 10, 14, 22, 26, 27],
             'on_finished': finished
         }
