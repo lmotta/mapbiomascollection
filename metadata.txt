@@ -5,11 +5,11 @@ about:This plugin add layers(WMS) of collection from MapBiomas.
       This plugin is developed of collaborative with Solved[1]
       [1] https://solved.eco.br
 
-version:1.1
+version:1.2
 qgisMinimumVersion:3.10
 
 author:Luiz Motta and Luiz Cortinhas
-email:solved@solved.eco.br
+email:motta.luiz@gmail.com, luiz.cortinhas@solved.eco.br
 
 category:Web
 
@@ -24,7 +24,9 @@ icon:mapbiomas.svg
 experimental:False
 deprecated:False
 
-changelog: - 1.1(2020-10-28)
+changelog: 1.2(2021-03-01)
+  Added 2018 and 2019
+  - 1.1(2020-10-28)
   Mapbiomas map service update
   - 1.0(2020-03-25)
   Changed Docwidget to WidgetProvider(legend)
