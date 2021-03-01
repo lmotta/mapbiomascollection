@@ -1,7 +1,7 @@
 {
-    "version": "5.0",
+    "version": "4.1",
     "url": "http://azure.solved.eco.br:8080/geoserver/solved/wms",
-    "years": { "min": 1985, "max": 2017},
+    "years": { "min": 1985, "max": 2019},
     "classes": {
         "Florestry": {
             "id": 1, "color": { "r": 18, "g": 153, "b": 18 },
@@ -34,13 +34,20 @@
                 "Agriculture": {
                     "id": 18, "color": { "r": 233, "g": 116, "b": 237 },
                     "classes": {
-                        "Annual and Perennial Crop": { "id": 19, "color": { "r": 213, "g": 166, "b": 189 } },
-                        "Semi-perennial Crop": { "id": 20, "color": { "r": 194, "g": 123, "b": 160 } }
-                    }
-                },
-                "Mosaic of Agriculture and Pasture": { "id": 21, "color": { "r": 255, "g": 239, "b": 195 } }
-            }
-        },
+                        "Temporary Crop ": {
+                            "id": 19, "color": { "r": 213, "g": 166, "b": 189 },
+                            "classes": {
+                                "Soybean": { "id": 39, "color": { "r": 197, "g": 159, "b": 244 }},
+                                "Suggar Cane": { "id": 20, "color": { "r": 194, "g": 123, "b": 160 }},
+                                "Other Temporary Crops ": { "id": 41, "color": { "r": 231, "g": 135, "b": 248 }}
+                             }
+                            },
+                            "Perennial Crop": { "id": 36, "color": { "r": 243, "g": 180, "b": 241 } }
+                        }
+                    },
+                    "Mosaic of Agriculture and Pasture": { "id": 21, "color": { "r": 255, "g": 239, "b": 195 } }
+                }
+            },
         "Non vegetated area": {
             "id": 22, "color": { "r": 234, "g": 153, "b": 153 },
             "classes": {
