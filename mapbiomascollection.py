@@ -390,7 +390,7 @@ class MapBiomasCollection(QObject):
                 name = f_name.format( locale='en_US')
                 fileConfig = os.path.join( dirname, name )
 
-            with open(fileConfig) as json_file:
+            with open(fileConfig, encoding='utf-8') as json_file:
                 data = json.load(json_file)    
             return data
 
