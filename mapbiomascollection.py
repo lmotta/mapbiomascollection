@@ -19,8 +19,9 @@ email                : motta.luiz@gmail.com, luiz.cortinhas@solved.eco.br
  ***************************************************************************/
 """
 
-import os, time, json
+import os, time
 import urllib.parse
+import urllib.request,json
 import warnings
 from osgeo import gdal
 
@@ -47,89 +48,76 @@ from qgis.gui import QgsGui, QgsMessageBar, QgsLayerTreeEmbeddedWidgetProvider
 #https://production.mapserver.mapbiomas.org/wms/coverage.map?service=WMS&request=GetMap&layers=coverage&styles=&format=image%2Fpng&transparent=true&version=1.3.0&territory_ids=96&year=2019&class_tree_node_ids=28%2C36%2C50%2C51%2C52%2C35%2C29%2C37%2C38%2C41%2C40%2C39%2C30%2C43%2C42%2C54%2C56%2C55%2C57%2C53%2C44%2C31%2C45%2C46%2C47%2C34%2C32%2C49%2C48%2C33&width=256&height=256&srs=EPSG%3A3857&maxZoom=19&minZoom=4&bbox=-5635549.221409475,-1252344.2714243263,-5009377.085697311,-626172.1357121632
 
 class MapBiomasCollectionWidget(QWidget):
-    classRef = {1:{'color':'129912','parent':0,'status':False},
-				2:{'color':'1F4423','parent':1,'status':False},
-				3:{'color':'006400','parent':2,'status':False},
-				4:{'color':'32CD32','parent':2,'status':False},
-				5:{'color':'687537','parent':2,'status':False},
-				6:{'color':'000000','parent':0,'status':False},
-				7:{'color':'000000','parent':0,'status':False},
-				8:{'color':'000000','parent':0,'status':False},
-				9:{'color':'935132','parent':1,'status':False},
-				10:{'color':'BBFCAC','parent':0,'status':False},
-				11:{'color':'45C2A5','parent':10,'status':False},
-				12:{'color':'B8AF4F','parent':10,'status':False},
-				13:{'color':'BDB76B','parent':10,'status':False},
-				14:{'color':'FFFFB2','parent':0,'status':False},
-				15:{'color':'FFD966','parent':14,'status':False},
-				16:{'color':'000000','parent':0,'status':False},
-				17:{'color':'000000','parent':0,'status':False},
-				18:{'color':'E974ED','parent':14,'status':False},
-				19:{'color':'D5A6BD','parent':18,'status':False},
-				20:{'color':'C27BA0','parent':19,'status':False},
-				21:{'color':'FFEFC3','parent':14,'status':False},
-				22:{'color':'EA9999','parent':0,'status':False},
-				23:{'color':'DD7E6B','parent':22,'status':False},
-				24:{'color':'af2a2a','parent':22,'status':False},
-				25:{'color':'FF99FF','parent':22,'status':False},
-				26:{'color':'0000FF','parent':0,'status':False},
-				27:{'color':'D5D5E5','parent':0,'status':False},
-				28:{'color': '000000','parent':0,'status':False},
-				29:{'color':'FF8C00','parent':10,'status':False},
-				30:{'color':'8A2BE2','parent':22,'status':False},
-				31:{'color':'29EEE4','parent':26,'status':False},
-				32:{'color':'968c46','parent':10,'status':False},
-				33:{'color':'0000FF','parent':26,'status':False},
-				34:{'color':'000000','parent':0,'status':False},
-				35:{'color':'000000','parent':0,'status':False},
-				36:{'color':'f3b4f1','parent':18,'status':False},
-				37:{'color':'000000','parent':0,'status':False},
-				38:{'color':'000000','parent':0,'status':False},
-				39:{'color':'c59ff4','parent':19,'status':False},
-				40:{'color':'000000','parent':0,'status':False},
-				41:{'color':'e787f8','parent':19,'status':False}}
+    classRef = ''
     @staticmethod
     def getParentColor(item):
-        if item['parent'] == 0 and item['status'] == False:
+        #print('parentColor')
+        #print(item)
+        if item['parent'] == '0' and item['status'] == False:
+            #print('returning blank')
             return 'FFFFFF'
         if item['status']:
             return item['color']
         else:
+            #print('returning parent')
+            #print(MapBiomasCollectionWidget.classRef[item['parent']])
             return MapBiomasCollectionWidget.getParentColor(MapBiomasCollectionWidget.classRef[item['parent']])
 
     @staticmethod
-    def getUrl(url, version, year, l_class_id):
+    def getUrl(url, version, year, l_class_id,classRef):
+        #warnings.warn( 'Here4') 
+        
+        MapBiomasCollectionWidget.classRef = classRef;
         l_strClass = [ str(item) for item in l_class_id ]
+        #print('AQUII1')
+        #print(l_strClass)
         for item in MapBiomasCollectionWidget.classRef.keys():
+            #print('item='+item)
+            #print('[item]status='+str(MapBiomasCollectionWidget.classRef[item]['status']))
             MapBiomasCollectionWidget.classRef[item]['status'] = False
-        for item in l_class_id:
+        for item in l_strClass:
             MapBiomasCollectionWidget.classRef[item]['status'] = True
+            #print('item='+item)
+            #print('[item]status='+str(MapBiomasCollectionWidget.classRef[item]['status']))
         #ENV Percorredor!
+        #print('AQUII2')
         env = 'env='
         for item in MapBiomasCollectionWidget.classRef.keys():
+            #print(item)
             classID = item
+            #print('color='+str(MapBiomasCollectionWidget.classRef[item]))
             color = MapBiomasCollectionWidget.getParentColor(MapBiomasCollectionWidget.classRef[item])
+            #print('color='+str(color))
             env = env + f'{classID}:{color};'
-        #env=1:00FF00;2:triangle;3:12
-        #crs=EPSG:3857&dpiMode=7&format=image/png&layers=mapbiomas&styles&url=http://azure.solved.eco.br:8080/geoserver/solved/wms
+            #print('env='+str(env))
         params = {
             'IgnoreGetFeatureInfoUrl': '1',
             'IgnoreGetMapUrl': '1',
             'service': 'WMS',
             'styles': 'solved:mapbiomas_legend',
-            'styles': '',
             'request': 'GetMap',
             'format': 'image/png', # image/png8
-            'layers': f"mapbiomas_{year}",
-            'crs': 'EPSG:4326'
+            'layers': 'mapbiomas_'+str(year),
+            'crs': 'EPSG:4326',
+            # 'stepHeight':'256',
+            # 'stepWidth':'256',
+            # 'maxHeight':'256',
+            # 'maxWidth':'256',
+            # 'dpiMode':'7',
+            # 'featureCount':'10'
         }
+       
         paramsWms = '&'.join( [ f"{k}={v}" for k,v in params.items() ] )
         #'IgnoreGetFeatureInfoUrl=1&IgnoreGetMapUrl=1&crs=EPSG:3857&dpiMode=7&format=image/png&layers=coverage&styles='
         paramsQuote = f""
-        paramsQuote = f"{paramsQuote}&transparent=true&version=1.1.1"
+        paramsQuote = f"{paramsQuote}&transparent=true&tiled=true&version=1.1.1&crs=EPSG:4326&LAYERS=mapbiomas_"+str(year)
+        #paramsQuote = urllib.parse.quote( f"{paramsQuote}&exceptions=application/vnd.ogc.se_inimage&years={year}&{env}&classification_ids=" )# a ordem importa
         paramsQuote = urllib.parse.quote( f"{paramsQuote}&exceptions=application/vnd.ogc.se_inimage&years={year}&{env}&classification_ids=" )# a ordem importa
+        #print(paramsQuote)
         paramClassification = ','.join( l_strClass )
+        #print(paramClassification)
         msg = f"{paramsWms}&url={url}?{paramsQuote}{paramClassification}"
+        #warnings.warn('Here4.5')
         #warnings.warn(msg)
         return f"{paramsWms}&url={url}?{paramsQuote}{paramClassification}"
 
@@ -141,7 +129,7 @@ class MapBiomasCollectionWidget(QWidget):
 
             def getClasses():
                 values = [ item for item in paramsSource if item.find('classification_ids=') > -1 ]
-                #warnings.warn(str(values))
+                ##warnings.warn(str(values))
                 if (not len( values ) == 1) or (values[0] == 'classification_ids='):
                     return [] 
                 else :
@@ -280,12 +268,12 @@ class MapBiomasCollectionWidget(QWidget):
 
     def _uploadSource(self):
         def checkDataSource():
-            url = self.getUrl( self.url, self.version, self.year, self.l_class_id )
-            print('URL:')
-            print(url)
+            url = self.getUrl( self.url, self.version, self.year, self.l_class_id, MapBiomasCollectionWidget.classRef )
+            #print('URL:')
+            #print(url)
             name = f"Collection {self.version} - {self.year}"
-            print('name:')
-            print(name)
+            #print('name:')
+            #print(name)
             args = [ url, name, self.layer.providerType() ]
             layer = QgsRasterLayer( *args )
             if not layer.isValid():
@@ -360,10 +348,10 @@ class LayerMapBiomasCollectionWidgetProvider(QgsLayerTreeEmbeddedWidgetProvider)
         if not layer.providerType() == 'wms':
             return False
         source = urllib.parse.unquote( layer.source() ).split('&')
-        print('Here')
+        #print('Here')
         host = f"url={self.data['url']}?map=wms/v/{self.data['version']}/classification/coverage.map"
-        print(host)
-        #warnings.warn(host)
+        #print(host)
+        ##warnings.warn(host)
         l_url = [ item for item in source if item.find( host ) > -1 ]
         return len( l_url ) > 0
 
@@ -372,26 +360,16 @@ class MapBiomasCollection(QObject):
     MODULE = 'MapBiomasCollection'
     def __init__(self, iface):
         def getConfig():
-            def existLocaleConfig():
-                overrideLocale = QSettings().value('locale/overrideFlag', False, type=bool)
-                locale = QLocale.system().name() if not overrideLocale else QSettings().value('locale/userLocale', '')
-                name = f_name.format( locale=locale )
-                fileConfig = os.path.join( dirname, name )
-                if os.path.exists( fileConfig ):
-                    return { 'isOk': True, 'fileConfig': fileConfig }
-                return { 'isOk': False }
-
-            f_name = "mapbiomascollection_{locale}.json"
-            dirname = os.path.dirname(__file__)
-            r = existLocaleConfig()
-            if r['isOk']:
-                fileConfig = r['fileConfig']
-            else:
-                name = f_name.format( locale='en_US')
-                fileConfig = os.path.join( dirname, name )
-
-            with open(fileConfig, encoding='utf-8') as json_file:
-                data = json.load(json_file)    
+            overrideLocale = QSettings().value('locale/overrideFlag', False, type=bool)
+            locale = QLocale.system().name() if not overrideLocale else QSettings().value('locale/userLocale', '')
+            f_name = 'http://azure.solved.eco.br:90/mapbiomascollection_{locale}.json'
+            if locale != 'pt_BR':
+                f_name = f_name.format( locale='en_US')
+            name = f_name.format( locale=locale )
+            #warnings.warn( 'Here')
+            with urllib.request.urlopen(name) as url:
+                data = json.loads(url.read().decode())    
+            #warnings.warn( 'Here2')    
             return data
 
         super().__init__()        
@@ -410,10 +388,12 @@ class MapBiomasCollection(QObject):
 
     def run(self):
         def createLayer(task, year, l_class_id):
-            args = ( self.data['url'], self.data['version'], year, l_class_id )
-            #warnings.warn( self.data['url'])
+            args = (self.data['url'], self.data['version'], year, l_class_id, self.data['classParents'])
+            #warnings.warn( 'Here3') 
+           
             url = MapBiomasCollectionWidget.getUrl( *args )
-            #warnings.warn(url)
+            #warnings.warn( 'Here5') 
+            ##warnings.warn(url)
             return ( url, f"Collection {self.data['version']} - {year}", 'wms' )
 
         def finished(exception, result=None):
