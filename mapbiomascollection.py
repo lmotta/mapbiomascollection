@@ -3,7 +3,7 @@
 /***************************************************************************
 Name                 : MapBiomas Collection
 Description          : This plugin lets you get collection of mapping from MapBiomas Project(http://mapbiomas.org/).
-Date                 : August, 2020
+Date                 : November, 2021
 copyright            : (C) 2019 by Luiz Motta, Updated by Luiz Cortinhas (2020)
 email                : motta.luiz@gmail.com, luiz.cortinhas@solved.eco.br
 
@@ -45,51 +45,36 @@ from qgis.core import (
     QgsTask
 )
 from qgis.gui import QgsGui, QgsMessageBar, QgsLayerTreeEmbeddedWidgetProvider
-#https://production.mapserver.mapbiomas.org/wms/coverage.map?service=WMS&request=GetMap&layers=coverage&styles=&format=image%2Fpng&transparent=true&version=1.3.0&territory_ids=96&year=2019&class_tree_node_ids=28%2C36%2C50%2C51%2C52%2C35%2C29%2C37%2C38%2C41%2C40%2C39%2C30%2C43%2C42%2C54%2C56%2C55%2C57%2C53%2C44%2C31%2C45%2C46%2C47%2C34%2C32%2C49%2C48%2C33&width=256&height=256&srs=EPSG%3A3857&maxZoom=19&minZoom=4&bbox=-5635549.221409475,-1252344.2714243263,-5009377.085697311,-626172.1357121632
 
 class MapBiomasCollectionWidget(QWidget):
     classRef = ''
     @staticmethod
     def getParentColor(item):
-        #print('parentColor')
-        #print(item)
         if item['parent'] == '0' and item['status'] == False:
-            #print('returning blank')
             return 'FFFFFF'
         if item['status']:
             return item['color']
         else:
-            #print('returning parent')
-            #print(MapBiomasCollectionWidget.classRef[item['parent']])
             return MapBiomasCollectionWidget.getParentColor(MapBiomasCollectionWidget.classRef[item['parent']])
 
     @staticmethod
     def getUrl(url, version, year, l_class_id,classRef):
-        #warnings.warn( 'Here4') 
-        
         MapBiomasCollectionWidget.classRef = classRef;
         l_strClass = [ str(item) for item in l_class_id ]
-        #print('AQUII1')
-        #print(l_strClass)
         for item in MapBiomasCollectionWidget.classRef.keys():
-            #print('item='+item)
-            #print('[item]status='+str(MapBiomasCollectionWidget.classRef[item]['status']))
             MapBiomasCollectionWidget.classRef[item]['status'] = False
         for item in l_strClass:
             MapBiomasCollectionWidget.classRef[item]['status'] = True
-            #print('item='+item)
-            #print('[item]status='+str(MapBiomasCollectionWidget.classRef[item]['status']))
         #ENV Percorredor!
-        #print('AQUII2')
         env = 'env='
         for item in MapBiomasCollectionWidget.classRef.keys():
-            #print(item)
             classID = item
-            #print('color='+str(MapBiomasCollectionWidget.classRef[item]))
+            classID_opacity = str(classID)+'_o'
+            opacity = '1'
             color = MapBiomasCollectionWidget.getParentColor(MapBiomasCollectionWidget.classRef[item])
-            #print('color='+str(color))
-            env = env + f'{classID}:{color};'
-            #print('env='+str(env))
+            if color == 'FFFFFF':
+                opacity = '0'
+            env = env + f'{classID}:{color};{classID_opacity}:{opacity};'
         params = {
             'IgnoreGetFeatureInfoUrl': '1',
             'IgnoreGetMapUrl': '1',
@@ -108,17 +93,11 @@ class MapBiomasCollectionWidget(QWidget):
         }
        
         paramsWms = '&'.join( [ f"{k}={v}" for k,v in params.items() ] )
-        #'IgnoreGetFeatureInfoUrl=1&IgnoreGetMapUrl=1&crs=EPSG:3857&dpiMode=7&format=image/png&layers=coverage&styles='
         paramsQuote = f""
         paramsQuote = f"{paramsQuote}&transparent=true&tiled=true&version=1.1.1&crs=EPSG:4326&LAYERS=mapbiomas_"+str(year)
-        #paramsQuote = urllib.parse.quote( f"{paramsQuote}&exceptions=application/vnd.ogc.se_inimage&years={year}&{env}&classification_ids=" )# a ordem importa
         paramsQuote = urllib.parse.quote( f"{paramsQuote}&exceptions=application/vnd.ogc.se_inimage&years={year}&{env}&classification_ids=" )# a ordem importa
-        #print(paramsQuote)
         paramClassification = ','.join( l_strClass )
-        #print(paramClassification)
         msg = f"{paramsWms}&url={url}?{paramsQuote}{paramClassification}"
-        #warnings.warn('Here4.5')
-        #warnings.warn(msg)
         return f"{paramsWms}&url={url}?{paramsQuote}{paramClassification}"
 
     def __init__(self, layer, data):
@@ -129,7 +108,6 @@ class MapBiomasCollectionWidget(QWidget):
 
             def getClasses():
                 values = [ item for item in paramsSource if item.find('classification_ids=') > -1 ]
-                ##warnings.warn(str(values))
                 if (not len( values ) == 1) or (values[0] == 'classification_ids='):
                     return [] 
                 else :
@@ -269,11 +247,7 @@ class MapBiomasCollectionWidget(QWidget):
     def _uploadSource(self):
         def checkDataSource():
             url = self.getUrl( self.url, self.version, self.year, self.l_class_id, MapBiomasCollectionWidget.classRef )
-            #print('URL:')
-            #print(url)
             name = f"Collection {self.version} - {self.year}"
-            #print('name:')
-            #print(name)
             args = [ url, name, self.layer.providerType() ]
             layer = QgsRasterLayer( *args )
             if not layer.isValid():
@@ -348,10 +322,7 @@ class LayerMapBiomasCollectionWidgetProvider(QgsLayerTreeEmbeddedWidgetProvider)
         if not layer.providerType() == 'wms':
             return False
         source = urllib.parse.unquote( layer.source() ).split('&')
-        #print('Here')
         host = f"url={self.data['url']}?map=wms/v/{self.data['version']}/classification/coverage.map"
-        #print(host)
-        ##warnings.warn(host)
         l_url = [ item for item in source if item.find( host ) > -1 ]
         return len( l_url ) > 0
 
@@ -366,10 +337,8 @@ class MapBiomasCollection(QObject):
             if locale != 'pt_BR':
                 f_name = f_name.format( locale='en_US')
             name = f_name.format( locale=locale )
-            #warnings.warn( 'Here')
             with urllib.request.urlopen(name) as url:
                 data = json.loads(url.read().decode())    
-            #warnings.warn( 'Here2')    
             return data
 
         super().__init__()        
@@ -389,11 +358,7 @@ class MapBiomasCollection(QObject):
     def run(self):
         def createLayer(task, year, l_class_id):
             args = (self.data['url'], self.data['version'], year, l_class_id, self.data['classParents'])
-            #warnings.warn( 'Here3') 
-           
             url = MapBiomasCollectionWidget.getUrl( *args )
-            #warnings.warn( 'Here5') 
-            ##warnings.warn(url)
             return ( url, f"Collection {self.data['version']} - {year}", 'wms' )
 
         def finished(exception, result=None):
