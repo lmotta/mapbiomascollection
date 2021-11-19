@@ -19,10 +19,9 @@ email                : motta.luiz@gmail.com, luiz.cortinhas@solved.eco.br
  ***************************************************************************/
 """
 
-import os, time
 import urllib.parse
-import urllib.request,json
-import warnings
+import urllib.request, json
+
 from osgeo import gdal
 
 from qgis.PyQt.QtCore import (
@@ -59,7 +58,7 @@ class MapBiomasCollectionWidget(QWidget):
 
     @staticmethod
     def getUrl(url, version, year, l_class_id,classRef):
-        MapBiomasCollectionWidget.classRef = classRef;
+        MapBiomasCollectionWidget.classRef = classRef
         l_strClass = [ str(item) for item in l_class_id ]
         for item in MapBiomasCollectionWidget.classRef.keys():
             MapBiomasCollectionWidget.classRef[item]['status'] = False
@@ -331,21 +330,44 @@ class MapBiomasCollection(QObject):
     MODULE = 'MapBiomasCollection'
     def __init__(self, iface):
         def getConfig():
+            def readUrlJson(locale):
+                f_name = 'http://azure.solved.eco.br:90/mapbiomascollection_{locale}.json'
+                isOk = True
+                try:
+                    name = f_name.format( locale=locale )
+                    with urllib.request.urlopen(name) as url:
+                        data = json.loads( url.read().decode() )
+                except:
+                    isOk = False
+                
+                r = { 'isOk': isOk }
+                ( key, value ) = ( 'data', data )  if isOk else ( 'message', f"Missing file '{name}'" )
+                r[ key ] = value
+                return r
+
             overrideLocale = QSettings().value('locale/overrideFlag', False, type=bool)
             locale = QLocale.system().name() if not overrideLocale else QSettings().value('locale/userLocale', '')
-            f_name = 'http://azure.solved.eco.br:90/mapbiomascollection_{locale}.json'
-            if locale != 'pt_BR':
-                f_name = f_name.format( locale='en_US')
-            name = f_name.format( locale=locale )
-            with urllib.request.urlopen(name) as url:
-                data = json.loads(url.read().decode())    
-            return data
+            r = readUrlJson( locale )
+            if r['isOk']:
+                return r['data']
+
+            if not r['isOk'] and locale == 'en_US':
+                self.messageError = r['message']
+                return None
+
+            r = readUrlJson('en_US')
+            if r['isOk']:
+                return r['data']
+
+            self.messageError = r['message']
+            return None
 
         super().__init__()        
         self.msgBar = iface.messageBar()
         self.root = QgsProject.instance().layerTreeRoot()
         self.taskManager = QgsApplication.taskManager()
-        self.data = getConfig()
+        self.messageError = ''
+        self.data = getConfig() # If error, return None and set self.messageError
         self.widgetProvider = None
 
     def register(self):
@@ -384,6 +406,10 @@ class MapBiomasCollection(QObject):
             ltl = root.findLayer( layer )
             ltl.setExpanded(True)
 
+        if self.data is None:
+            self.msgBar.pushMessage( self.MODULE, self.messageError, Qgis.Critical, 0 )
+            return
+        
         msg = f"Adding layer collection from {self.data['url']}"
         msg = f"{msg}(version {self.data['version']})..."
         self.msgBar.pushMessage( self.MODULE, msg, Qgis.Info, 0 )
