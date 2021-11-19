@@ -18,7 +18,11 @@ This plugin lets you get collection of mapping from MapBiomas Project.
 ## Author
 Luiz Motta, Luiz Cortinhas
 
+
 ## Changelog
+- 2021-11-19
+Enhanced WMS loading performance
+Updated to Collection 6.0
 - 2021-03-12
 Fixed error decode open JSON. Thanks Maira.
 - 2021-03-01

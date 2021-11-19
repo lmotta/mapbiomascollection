@@ -1,11 +1,11 @@
 [general]
 name: MapBiomas Collection
-description: This plugin lets you get collection of mapping from MapBiomas Project(http://mapbiomas.org/).
-about:This plugin add layers(WMS) of collection from MapBiomas.
-      This plugin is developed of collaborative with Solved[1]
+description: This plugin lets you add the anual land use and land cover maps from the MapBiomas Project (http://mapbiomas.org/) as a collection of WMS layer.
+about:This plugin adds Mapbiomas annual land use land cover maps as WMS layers.
+      The plugin is developed in collaboration with Solved[1]
       [1] https://solved.eco.br
 
-version:1.3
+version:1.4
 qgisMinimumVersion:3.10
 
 author:Luiz Motta and Luiz Cortinhas
@@ -24,7 +24,10 @@ icon:mapbiomas.svg
 experimental:False
 deprecated:False
 
-changelog: 1.3(2021-03-12)
+changelog:1.4(2021-11-19)
+  Enhanced WMS loading performance
+  Updated to Collection 6.0
+  - 1.3(2021-03-12)
   Fixed error decode open JSON. Thanks Maira.
   - 1.2(2021-03-01)
   Added 2018 and 2019

@@ -5,7 +5,6 @@ if [ -f "./$plugin_dir.zip" ]; then
 fi
 mkdir "./$plugin_dir"
 cp *.py "./$plugin_dir"
-cp *.json "./$plugin_dir"
 for item in metadata.txt LICENSE mapbiomas.svg; do cp "./$item" "./$plugin_dir"; done
 zip -r $plugin_dir $plugin_dir
 rm -r $plugin_dir
