@@ -26,7 +26,7 @@ from osgeo import gdal
 
 from qgis.PyQt.QtCore import (
     Qt, QSettings, QLocale,
-    QObject, pyqtSlot, pyqtSignal
+    QObject, pyqtSlot 
 )
 from qgis.PyQt.QtWidgets import (
     QWidget, QPushButton,
